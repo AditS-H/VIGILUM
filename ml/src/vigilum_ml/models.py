@@ -148,6 +148,72 @@ class InferenceRequest(BaseModel):
     chain_id: int
     bytecode: str  # Hex-encoded
     source_code: str | None = None
+
+
+# Additional types for training and inference
+
+class VulnerabilityLabel(BaseModel):
+    """Label for a vulnerability in training data."""
+    vuln_type: str
+    severity: str | None = None
+    confidence: float = 1.0
+
+
+class ContractSample(BaseModel):
+    """Training sample for vulnerability detection."""
+    contract_id: str
+    bytecode: str
+    source_code: str | None = None
+    is_malicious: bool = False
+    risk_score: float | None = None
+    labels: list[VulnerabilityLabel] = Field(default_factory=list)
+
+
+class VulnerabilityPrediction(BaseModel):
+    """Single vulnerability prediction from the model."""
+    vuln_type: str
+    confidence: float = Field(..., ge=0, le=1)
+    severity: str = "medium"
+
+
+class TrainingConfig(BaseModel):
+    """Configuration for model training."""
+    
+    # Training parameters
+    num_epochs: int = 50
+    batch_size: int = 32
+    learning_rate: float = 1e-4
+    weight_decay: float = 1e-5
+    gradient_clip: float = 1.0
+    num_workers: int = 4
+    
+    # Loss weights
+    malicious_weight: float = 1.0
+    vuln_weight: float = 1.0
+    risk_weight: float = 0.5
+    
+    # Checkpointing
+    save_every: int = 5
+    
+
+# Redefine PredictionResult with more flexible fields
+class PredictionResult(BaseModel):
+    """ML model prediction output (flexible version for inference service)."""
+    
+    # Overall assessment
+    is_malicious: bool = False
+    malicious_probability: float = Field(0.0, ge=0, le=1)
+    risk_score: int = Field(0, ge=0, le=100)
+    
+    # Vulnerability predictions
+    vulnerabilities: list[VulnerabilityPrediction] = Field(default_factory=list)
+    
+    # Embedding for similarity search
+    embedding: list[float] | None = None
+    
+    # Contract features
+    contract_features: ContractFeatures | None = None
+
     abi: dict[str, Any] | None = None
 
 
