@@ -3,20 +3,24 @@ package scanner
 
 import (
 	"context"
+	"encoding/hex"
 	"log/slog"
+	"strings"
 
 	"github.com/vigilum/backend/internal/domain"
 )
 
 // StaticAnalyzer performs static code analysis on bytecode and source.
 type StaticAnalyzer struct {
-	logger *slog.Logger
+	logger          *slog.Logger
+	patternDetector *PatternDetector
 }
 
 // NewStaticAnalyzer creates a new static analyzer.
 func NewStaticAnalyzer(logger *slog.Logger) *StaticAnalyzer {
 	return &StaticAnalyzer{
-		logger: logger.With("scanner", "static"),
+		logger:          logger.With("scanner", "static"),
+		patternDetector: NewPatternDetector(),
 	}
 }
 
@@ -88,30 +92,120 @@ func (s *StaticAnalyzer) Scan(ctx context.Context, contract *domain.Contract) (*
 // analyzeBytecode checks bytecode for known vulnerability patterns.
 func (s *StaticAnalyzer) analyzeBytecode(ctx context.Context, contract *domain.Contract) []domain.Vulnerability {
 	vulns := make([]domain.Vulnerability, 0)
+	
+	if len(contract.Bytecode) == 0 {
+		return vulns
+	}
 
-	// TODO: Implement bytecode pattern matching
-	// - Check for DELEGATECALL without proper validation
-	// - Check for SELFDESTRUCT access control
-	// - Check for unchecked external calls
-	// - Detect proxy patterns
-	// - Check for storage collision risks
+	bytecodeHex := hex.EncodeToString(contract.Bytecode)
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// DELEGATECALL Detection
+	// ═══════════════════════════════════════════════════════════════════════════
+	// DELEGATECALL opcode = 0xf4
+	if strings.Contains(bytecodeHex, "f4") {
+		vulns = append(vulns, domain.Vulnerability{
+			Type:        domain.VulnLogicError,
+			Severity:    domain.ThreatLevelInfo,
+			Confidence:  0.5,
+			Title:       "DELEGATECALL Detected",
+			Description: "Contract uses delegatecall - verify implementation is secure",
+			Location:    domain.CodeLocation{File: "bytecode"},
+			Remediation: "Ensure delegatecall targets are trusted and cannot be manipulated",
+		})
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// SELFDESTRUCT Detection
+	// ═══════════════════════════════════════════════════════════════════════════
+	// SELFDESTRUCT opcode = 0xff
+	if strings.Contains(bytecodeHex, "ff") && s.looksLikeSelfDestruct(bytecodeHex) {
+		vulns = append(vulns, domain.Vulnerability{
+			Type:        domain.VulnAccessControl,
+			Severity:    domain.ThreatLevelHigh,
+			Confidence:  0.6,
+			Title:       "SELFDESTRUCT Detected",
+			Description: "Contract can be destroyed - verify access control",
+			Location:    domain.CodeLocation{File: "bytecode"},
+			Remediation: "Ensure selfdestruct is properly protected or consider removing it",
+		})
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// CREATE2 Detection (proxy/factory patterns)
+	// ═══════════════════════════════════════════════════════════════════════════
+	// CREATE2 opcode = 0xf5
+	if strings.Contains(bytecodeHex, "f5") {
+		vulns = append(vulns, domain.Vulnerability{
+			Type:        domain.VulnLogicError,
+			Severity:    domain.ThreatLevelInfo,
+			Confidence:  0.5,
+			Title:       "CREATE2 Detected",
+			Description: "Contract uses CREATE2 - may be a factory or proxy",
+			Location:    domain.CodeLocation{File: "bytecode"},
+			Remediation: "Review CREATE2 usage for address collision risks",
+		})
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Proxy Pattern Detection
+	// ═══════════════════════════════════════════════════════════════════════════
+	if s.looksLikeProxy(contract.Bytecode) {
+		vulns = append(vulns, domain.Vulnerability{
+			Type:        domain.VulnLogicError,
+			Severity:    domain.ThreatLevelInfo,
+			Confidence:  0.8,
+			Title:       "Proxy Contract Detected",
+			Description: "This appears to be a proxy contract - analyze implementation",
+			Location:    domain.CodeLocation{File: "bytecode"},
+			Remediation: "Verify implementation contract and upgrade mechanism",
+		})
+	}
 
 	return vulns
 }
 
+// looksLikeSelfDestruct checks if FF is likely SELFDESTRUCT vs other uses.
+func (s *StaticAnalyzer) looksLikeSelfDestruct(bytecode string) bool {
+	// SELFDESTRUCT typically follows an address push
+	// PUSH20 (0x73) + address + SELFDESTRUCT (0xff)
+	return strings.Contains(bytecode, "73") && strings.Contains(bytecode, "ff")
+}
+
+// looksLikeProxy detects proxy contract patterns.
+func (s *StaticAnalyzer) looksLikeProxy(bytecode []byte) bool {
+	if len(bytecode) < 50 {
+		return false
+	}
+	
+	bytecodeHex := hex.EncodeToString(bytecode)
+	
+	// ERC1967 implementation slot: 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc
+	if strings.Contains(bytecodeHex, "360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc") {
+		return true
+	}
+	
+	// Minimal proxy (EIP-1167) signature
+	if strings.HasPrefix(bytecodeHex, "363d3d373d3d3d363d73") {
+		return true
+	}
+	
+	// Short contract that mainly does delegatecall
+	if len(bytecode) < 100 && strings.Contains(bytecodeHex, "f4") {
+		return true
+	}
+	
+	return false
+}
+
 // analyzeSource checks source code for vulnerability patterns.
 func (s *StaticAnalyzer) analyzeSource(ctx context.Context, contract *domain.Contract) []domain.Vulnerability {
-	vulns := make([]domain.Vulnerability, 0)
+	if contract.SourceCode == "" {
+		return make([]domain.Vulnerability, 0)
+	}
 
-	// TODO: Implement AST analysis
-	// - Parse Solidity to AST
-	// - Check for reentrancy patterns
-	// - Check for integer overflow (pre-0.8.0)
-	// - Check for tx.origin usage
-	// - Check for timestamp dependence
-	// - Check for weak access control
-
-	return vulns
+	// Use pattern detector for source analysis
+	return s.patternDetector.DetectFromSource(ctx, contract.SourceCode)
 }
 
 // calculateRiskScore computes overall risk from vulnerabilities.

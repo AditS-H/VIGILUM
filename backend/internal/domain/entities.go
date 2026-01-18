@@ -73,19 +73,24 @@ type Vulnerability struct {
 type VulnType string
 
 const (
-	VulnReentrancy        VulnType = "reentrancy"
-	VulnOverflow          VulnType = "integer_overflow"
-	VulnUnderflow         VulnType = "integer_underflow"
-	VulnAccessControl     VulnType = "access_control"
-	VulnUncheckedCall     VulnType = "unchecked_external_call"
-	VulnTxOrigin          VulnType = "tx_origin"
-	VulnTimestamp         VulnType = "timestamp_dependency"
-	VulnFrontrunning      VulnType = "frontrunning"
-	VulnFlashLoan         VulnType = "flash_loan_attack"
+	VulnReentrancy         VulnType = "reentrancy"
+	VulnOverflow           VulnType = "integer_overflow"
+	VulnUnderflow          VulnType = "integer_underflow"
+	VulnAccessControl      VulnType = "access_control"
+	VulnUncheckedCall      VulnType = "unchecked_external_call"
+	VulnTxOrigin           VulnType = "tx_origin"
+	VulnTimestamp          VulnType = "timestamp_dependency"
+	VulnFrontrunning       VulnType = "frontrunning"
+	VulnFlashLoan          VulnType = "flash_loan_attack"
 	VulnOracleManipulation VulnType = "oracle_manipulation"
-	VulnRugPull           VulnType = "rug_pull_pattern"
-	VulnHoneypot          VulnType = "honeypot"
-	VulnPhishing          VulnType = "phishing_signature"
+	VulnRugPull            VulnType = "rug_pull_pattern"
+	VulnHoneypot           VulnType = "honeypot"
+	VulnPhishing           VulnType = "phishing_signature"
+	VulnLogicError         VulnType = "logic_error"
+	VulnPrecisionLoss      VulnType = "precision_loss"
+	VulnWeakRandomness     VulnType = "weak_randomness"
+	VulnDOS                VulnType = "denial_of_service"
+	VulnStorageCollision   VulnType = "storage_collision"
 )
 
 // CodeLocation pinpoints a location in source code.
