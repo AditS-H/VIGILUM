@@ -1,0 +1,67 @@
+﻿# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+/backend/bin/
+/backend/vendor/
+
+# Rust
+/sdk/rust-sdk/target/
+/crypto/target/
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*\.class
+*.so
+.Python
+/ml/.venv/
+/venv/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+/sdk/ts-sdk/dist/
+
+# Foundry
+/contracts/out/
+/contracts/cache/
+/contracts/broadcast/
+
+# Noir
+/circuits/target/
+/circuits/proofs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.coverage
+htmlcov/
+
+# Build artifacts
+*.o
+*.a
