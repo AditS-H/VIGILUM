@@ -185,7 +185,7 @@ export class VigilumClient {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
+          const error = await response.json().catch(() => ({})) as { message?: string; code?: string };
           throw new VigilumApiError(
             response.status,
             error.message || `HTTP ${response.status}`,

@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import type { Address, Hash, Hex } from 'viem';
+import type { Address, Hash } from 'viem';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ENUMS
