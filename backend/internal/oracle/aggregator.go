@@ -3,6 +3,7 @@ package oracle
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -64,7 +65,7 @@ func NewAggregator(thresholds AggregationThresholds) *Aggregator {
 
 // TargetKey generates a unique key for a target.
 func TargetKey(chainID domain.ChainID, addr domain.Address) string {
-	return string(chainID) + ":" + string(addr)
+	return fmt.Sprintf("%d:%s", chainID, addr)
 }
 
 // ProcessEvents ingests new feed events and updates signals.

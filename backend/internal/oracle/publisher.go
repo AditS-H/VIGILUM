@@ -160,7 +160,7 @@ func (p *Publisher) QueueUpdate(signal ThreatSignal) error {
 	defer p.mu.Unlock()
 
 	// Check rate limit
-	key := string(signal.Target.ChainID) + ":" + string(signal.Target.Address)
+	key := fmt.Sprintf("%d:%s", signal.Target.ChainID, signal.Target.Address)
 	if lastUpdate, ok := p.lastUpdateTime[key]; ok {
 		if time.Since(lastUpdate) < p.minUpdateInterval {
 			return fmt.Errorf("rate limited: last update was %v ago", time.Since(lastUpdate))
@@ -186,7 +186,7 @@ func (p *Publisher) Publish(ctx context.Context, signal ThreatSignal) (*types.Tr
 	defer p.mu.Unlock()
 
 	// Check rate limit
-	key := string(signal.Target.ChainID) + ":" + string(signal.Target.Address)
+	key := fmt.Sprintf("%d:%s", signal.Target.ChainID, signal.Target.Address)
 	if lastUpdate, ok := p.lastUpdateTime[key]; ok {
 		if time.Since(lastUpdate) < p.minUpdateInterval {
 			return nil, fmt.Errorf("rate limited")
@@ -258,7 +258,7 @@ func (p *Publisher) PublishBatch(ctx context.Context, signals []ThreatSignal) (*
 	var filtered []ThreatSignal
 	now := time.Now()
 	for _, signal := range signals {
-		key := string(signal.Target.ChainID) + ":" + string(signal.Target.Address)
+		key := fmt.Sprintf("%d:%s", signal.Target.ChainID, signal.Target.Address)
 		if lastUpdate, ok := p.lastUpdateTime[key]; ok {
 			if now.Sub(lastUpdate) < p.minUpdateInterval {
 				continue
@@ -324,7 +324,7 @@ func (p *Publisher) PublishBatch(ctx context.Context, signals []ThreatSignal) (*
 
 	// Update rate limit trackers
 	for _, signal := range filtered {
-		key := string(signal.Target.ChainID) + ":" + string(signal.Target.Address)
+		key := fmt.Sprintf("%d:%s", signal.Target.ChainID, signal.Target.Address)
 		p.lastUpdateTime[key] = now
 	}
 	p.totalPublished += len(filtered)
