@@ -74,6 +74,11 @@ type RiskInfo struct {
 	ProofCount  int               `json:"proof_count"`
 }
 
+// GetRiskInfo is a convenience wrapper that calls GetRiskScore with default chainID.
+func (s *Service) GetRiskInfo(ctx context.Context, address string) (*RiskInfo, error) {
+	return s.GetRiskScore(ctx, address, 1) // Default to Ethereum mainnet (chainID 1)
+}
+
 // GenerateChallenge creates a new verification challenge.
 func (s *Service) GenerateChallenge(ctx context.Context) (*Challenge, error) {
 	s.logger.Debug("Generating new challenge")
