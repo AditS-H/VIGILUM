@@ -1,0 +1,51 @@
+# docker-compose.test.yml - Integration test environment with PostgreSQL
+
+version: '3.8'
+
+services:
+  # PostgreSQL database for integration tests
+  postgres-test:
+    image: postgres:17-alpine
+    container_name: vigilum-postgres-test
+    environment:
+      POSTGRES_USER: ${TEST_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${TEST_DB_NAME:-vigilum_test}
+      POSTGRES_INITDB_ARGS: "-c max_connections=200 -c shared_buffers=256MB"
+    ports:
+      - "${TEST_DB_PORT:-5433}:5432"
+    volumes:
+      # Persist test data across runs
+      - postgres_test_data:/var/lib/postgresql/data
+      # Initialize with schema
+      - ./backend/internal/db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_DB_USER:-postgres} -d ${TEST_DB_NAME:-vigilum_test}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vigilum-test
+
+  # Redis cache (optional, for future caching layer)
+  redis-test:
+    image: redis:7-alpine
+    container_name: vigilum-redis-test
+    ports:
+      - "${TEST_REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vigilum-test
+
+volumes:
+  postgres_test_data:
+    name: vigilum_test_postgres_data
+
+networks:
+  vigilum-test:
+    driver: bridge
+    name: vigilum-test-network
