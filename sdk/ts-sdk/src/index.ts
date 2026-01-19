@@ -56,6 +56,10 @@ export {
 // React hooks factory
 export { createVigilumHooks, type VigilumHooks } from './hooks';
 
+// Proof verification client & UI
+export { ProofVerificationClient } from './proof-client';
+export { ProofVerificationPage } from './components/ProofVerificationUI';
+
 // Types
 export * from './types';
 

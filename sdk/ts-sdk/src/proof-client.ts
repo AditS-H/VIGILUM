@@ -1,7 +1,5 @@
 // ProofVerificationClient.ts - TypeScript client for proof verification API
 
-import { Client } from './client';
-
 /**
  * Request/Response types for proof verification API
  */
@@ -81,12 +79,20 @@ export interface ErrorResponse {
 /**
  * ProofVerificationClient provides methods to interact with proof verification API
  */
-export class ProofVerificationClient {
-  private client: Client;
-  private baseUrl: string = '/api/v1';
+export interface ProofClientOptions {
+  /** Base URL for the API (omit trailing slash). Defaults to `/api/v1`. */
+  baseUrl?: string;
+  /** Optional fetch implementation for testing. Defaults to global fetch. */
+  fetcher?: typeof fetch;
+}
 
-  constructor(client: Client) {
-    this.client = client;
+export class ProofVerificationClient {
+  private readonly baseUrl: string;
+  private readonly fetcher: typeof fetch;
+
+  constructor(options: ProofClientOptions = {}) {
+    this.baseUrl = options.baseUrl ?? '/api/v1';
+    this.fetcher = options.fetcher ?? fetch;
   }
 
   /**
@@ -101,12 +107,7 @@ export class ProofVerificationClient {
       verifier_address: verifierAddress,
     };
 
-    const response = await this.client.post<GenerateChallengeResponse>(
-      `${this.baseUrl}/proofs/challenges`,
-      request
-    );
-
-    return response;
+    return this.post<GenerateChallengeResponse>('/proofs/challenges', request);
   }
 
   /**
@@ -127,12 +128,7 @@ export class ProofVerificationClient {
       proof_nonce: proofNonce,
     };
 
-    const response = await this.client.post<SubmitProofResponse>(
-      `${this.baseUrl}/proofs/verify`,
-      request
-    );
-
-    return response;
+    return this.post<SubmitProofResponse>('/proofs/verify', request);
   }
 
   /**
@@ -149,11 +145,7 @@ export class ProofVerificationClient {
       limit: limit.toString(),
     });
 
-    const response = await this.client.get<GetUserProofsResponse>(
-      `${this.baseUrl}/proofs?${params.toString()}`
-    );
-
-    return response;
+    return this.get<GetUserProofsResponse>(`/proofs?${params.toString()}`);
   }
 
   /**
@@ -164,45 +156,72 @@ export class ProofVerificationClient {
       user_id: userId,
     });
 
-    const response = await this.client.get<GetVerificationScoreResponse>(
-      `${this.baseUrl}/verification-score?${params.toString()}`
-    );
-
-    return response;
+    return this.get<GetVerificationScoreResponse>(`/verification-score?${params.toString()}`);
   }
 
   /**
    * Get challenge status
    */
   async getChallengeStatus(challengeId: string): Promise<any> {
-    const response = await this.client.get(
-      `${this.baseUrl}/proofs/challenges/${challengeId}`
-    );
-
-    return response;
+    return this.get(`/proofs/challenges/${challengeId}`);
   }
 
   /**
    * Check service health
    */
   async getHealth(): Promise<any> {
-    const response = await this.client.get(
-      `${this.baseUrl}/health`
-    );
-
-    return response;
+    return this.get(`/health`);
   }
 
   /**
    * Verify firewall proof (alias endpoint)
    */
   async verifyFirewallProof(request: SubmitProofRequest): Promise<SubmitProofResponse> {
-    const response = await this.client.post<SubmitProofResponse>(
-      `${this.baseUrl}/firewall/verify-proof`,
-      request
-    );
+    return this.post<SubmitProofResponse>(`/firewall/verify-proof`, request);
+  }
 
-    return response;
+  // ---------------------------------------------------------------------------
+  // Internal HTTP helpers
+  // ---------------------------------------------------------------------------
+
+  private async get<T>(path: string): Promise<T> {
+    const res = await this.fetcher(`${this.baseUrl}${path}`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!res.ok) {
+      throw await this.toError(res);
+    }
+
+    return (await res.json()) as T;
+  }
+
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    const res = await this.fetcher(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw await this.toError(res);
+    }
+
+    return (await res.json()) as T;
+  }
+
+  private async toError(res: Response): Promise<Error> {
+    let message = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      if (typeof data?.message === 'string') {
+        message = data.message;
+      }
+    } catch (_) {
+      // Ignore JSON parse errors
+    }
+    return new Error(message);
   }
 
   /**
@@ -218,9 +237,19 @@ export class ProofVerificationClient {
    * Helper: Convert hex string to bytes
    */
   static hexToBytes(hex: string): Uint8Array {
-    const result = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < hex.length; i += 2) {
-      result[i / 2] = parseInt(hex.substr(i, 2), 16);
+    const normalized = hex.startsWith('0x') ? hex.slice(2) : hex;
+    if (normalized.length % 2 !== 0) {
+      throw new Error('Hex string must have an even length');
+    }
+
+    const result = new Uint8Array(normalized.length / 2);
+    for (let i = 0; i < normalized.length; i += 2) {
+      const byte = normalized.substr(i, 2);
+      const parsed = parseInt(byte, 16);
+      if (Number.isNaN(parsed)) {
+        throw new Error('Hex string contains invalid characters');
+      }
+      result[i / 2] = parsed;
     }
     return result;
   }

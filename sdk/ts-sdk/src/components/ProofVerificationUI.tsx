@@ -1,8 +1,7 @@
 // ProofVerificationUI.tsx - React components for proof verification interface
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ProofVerificationClient } from '../proof-client';
-import { Client } from '../client';
 
 /**
  * ProofVerificationPage - Main page component for proof verification
@@ -11,8 +10,7 @@ export const ProofVerificationPage: React.FC<{ userId: string; verifierAddress: 
   userId,
   verifierAddress,
 }) => {
-  const client = new Client();
-  const proofClient = new ProofVerificationClient(client);
+  const proofClient = useMemo(() => new ProofVerificationClient({ baseUrl: '/api/v1' }), []);
 
   return (
     <div className="proof-verification-container">
@@ -144,7 +142,6 @@ const ChallengeGeneratorCard: React.FC<{
       {challengeId && (
         <ProofSubmissionForm
           challengeId={challengeId}
-          userId={userId}
           proofClient={proofClient}
           onSubmitSuccess={() => {
             setChallengeId(null);
@@ -161,10 +158,9 @@ const ChallengeGeneratorCard: React.FC<{
  */
 const ProofSubmissionForm: React.FC<{
   challengeId: string;
-  userId: string;
   proofClient: ProofVerificationClient;
   onSubmitSuccess: () => void;
-}> = ({ challengeId, userId, proofClient, onSubmitSuccess }) => {
+}> = ({ challengeId, proofClient, onSubmitSuccess }) => {
   const [proofData, setProofData] = useState<string>('');
   const [timingVariance, setTimingVariance] = useState<number>(150);
   const [gasVariance, setGasVariance] = useState<number>(800);
@@ -187,7 +183,18 @@ const ProofSubmissionForm: React.FC<{
         throw new Error('Proof data is required');
       }
 
-      const proofBytes = ProofVerificationClient.hexToBytes(proofData);
+      const normalizedHex = proofData.trim().replace(/^0x/i, '');
+      if (!normalizedHex) {
+        throw new Error('Proof data is required');
+      }
+      if (normalizedHex.length % 2 !== 0) {
+        throw new Error('Proof data must have an even number of hex characters');
+      }
+      if (!/^[0-9a-fA-F]+$/.test(normalizedHex)) {
+        throw new Error('Proof data must be valid hex characters');
+      }
+
+      const proofBytes = ProofVerificationClient.hexToBytes(normalizedHex);
       const response = await proofClient.submitProof(
         challengeId,
         proofBytes,
@@ -431,6 +438,16 @@ const UserProofsHistory: React.FC<{
     );
   }
 
+  if (!proofs || !Array.isArray(proofs.proofs)) {
+    return (
+      <div className="alert alert-warning">
+        <span>No proofs found.</span>
+      </div>
+    );
+  }
+
+  const totalPages = proofs.page_info?.total_pages ?? 1;
+
   return (
     <div className="card bg-white rounded-lg shadow p-6">
       <h2 className="text-2xl font-bold mb-4">Proof History</h2>
@@ -485,11 +502,11 @@ const UserProofsHistory: React.FC<{
           Previous
         </button>
         <span className="flex items-center">
-          Page {page} of {proofs.page_info.total_pages}
+          Page {page} of {totalPages}
         </span>
         <button
-          onClick={() => setPage(page + 1)}
-          disabled={page === proofs.page_info.total_pages}
+          onClick={() => setPage(Math.min(totalPages, page + 1))}
+          disabled={page === totalPages}
           className="btn btn-sm"
         >
           Next
