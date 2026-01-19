@@ -2,9 +2,18 @@
 package models
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+)
+
+// Common errors
+var (
+	ErrNotFound     = errors.New("entity not found")
+	ErrDuplicate    = errors.New("duplicate entity")
+	ErrInvalid      = errors.New("invalid entity")
+	ErrUnauthorized = errors.New("unauthorized")
 )
 
 // ============================================================
@@ -13,11 +22,12 @@ import (
 
 // User represents a wallet/user in the system
 type User struct {
-	ID            uuid.UUID  `json:"id" db:"id"`
-	WalletAddress string     `json:"wallet_address" db:"wallet_address"`
-	CreatedAt     time.Time  `json:"created_at" db:"created_at"`
-	LastActivity  *time.Time `json:"last_activity,omitempty" db:"last_activity"`
-	RiskScore     float64    `json:"risk_score" db:"risk_score"`
+	ID              uuid.UUID  `json:"id" db:"id"`
+	WalletAddress   string     `json:"wallet_address" db:"wallet_address"`
+	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
+	LastActivity    *time.Time `json:"last_activity,omitempty" db:"last_activity"`
+	RiskScore       float64    `json:"risk_score" db:"risk_score"`
+	IsBlacklisted   bool       `json:"is_blacklisted" db:"is_blacklisted"`
 }
 
 // NewUser creates a new user
