@@ -4,8 +4,6 @@ package domain
 import (
 	"errors"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // Common errors
