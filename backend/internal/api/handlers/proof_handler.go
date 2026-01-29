@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -310,6 +311,22 @@ func (ph *ProofHandler) GetUserProofs(c *gin.Context) {
 
 	offset := (page - 1) * pageSize
 
+	// Get total count for pagination
+	totalCount, err := ph.verifier.GetUserProofCount(c.Request.Context(), userID)
+	if err != nil {
+		ph.logger.Error("Failed to get user proof count",
+			slog.String("user_id", userID),
+			slog.Any("error", err),
+		)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:      "internal_error",
+			Message:    err.Error(),
+			StatusCode: http.StatusInternalServerError,
+			Timestamp:  time.Now(),
+		})
+		return
+	}
+
 	// Retrieve proofs
 	proofs, err := ph.verifier.GetUserProofs(c.Request.Context(), userID, pageSize, offset)
 	if err != nil {
@@ -354,20 +371,28 @@ func (ph *ProofHandler) GetUserProofs(c *gin.Context) {
 		avgScore = totalScore / float64(len(proofs))
 	}
 
+	// Calculate total pages
+	totalPages := int(totalCount) / pageSize
+	if int(totalCount)%pageSize > 0 {
+		totalPages++
+	}
+
 	ph.logger.Info("User proofs retrieved",
 		slog.String("user_id", userID),
 		slog.Int("proof_count", len(proofs)),
+		slog.Int64("total_count", totalCount),
 	)
 
 	c.JSON(http.StatusOK, GetUserProofsResponse{
 		UserID:       userID,
-		ProofCount:   len(proofs),
+		ProofCount:   int(totalCount),
 		Proofs:       proofInfos,
 		AverageScore: avgScore,
 		PageInfo: PaginationInfo{
-			Page:     page,
-			PageSize: pageSize,
-			Total:    len(proofs),
+			Page:      page,
+			PageSize:  pageSize,
+			Total:     int(totalCount),
+			TotalPage: totalPages,
 		},
 	})
 }
@@ -410,22 +435,37 @@ func (ph *ProofHandler) GetVerificationScore(c *gin.Context) {
 		)
 	}
 
-	// Get user info for risk score
-	riskScore := 50 // Default risk score
-	lastVerifiedAt := time.Time{}
-	// In real implementation: fetch from user repository
+	// Get user verification metadata (risk score, last verified time, counts)
+	metadata, err := ph.verifier.GetUserVerificationMetadata(c.Request.Context(), userID)
+	if err != nil {
+		ph.logger.Error("Failed to get user verification metadata",
+			slog.String("user_id", userID),
+			slog.Any("error", err),
+		)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:      "internal_error",
+			Message:    "Failed to retrieve user metadata",
+			StatusCode: http.StatusInternalServerError,
+			Timestamp:  time.Now(),
+		})
+		return
+	}
 
 	ph.logger.Info("Verification score retrieved",
 		slog.String("user_id", userID),
 		slog.Float64("score", score),
+		slog.Int64("proof_count", metadata.ProofCount),
+		slog.Int64("verified_count", metadata.VerifiedCount),
 	)
 
 	c.JSON(http.StatusOK, GetVerificationScoreResponse{
 		UserID:             userID,
 		VerificationScore:  score,
 		IsVerified:         isVerified,
-		RiskScore:          riskScore,
-		LastVerifiedAt:     lastVerifiedAt,
+		RiskScore:          int(metadata.RiskScore),
+		LastVerifiedAt:     metadata.LastVerifiedAt,
+		ProofCount:         int(metadata.ProofCount),
+		VerifiedProofCount: int(metadata.VerifiedCount),
 	})
 }
 
@@ -492,20 +532,15 @@ func isValidAddress(address string) bool {
 	return true
 }
 
-func hexToBytes(hex string) ([]byte, error) {
-	if len(hex)%2 != 0 {
-		return nil, sql.ErrNoRows
-	}
-	bytes := make([]byte, len(hex)/2)
-	for i := 0; i < len(hex); i += 2 {
-		var b byte
-		_, err := json.Unmarshal([]byte(`"\\x`+hex[i:i+2]+`"`), &b)
-		if err != nil {
-			return nil, err
-		}
-		bytes[i/2] = b
-	}
-	return bytes, nil
+// hexToBytes converts a hex string to bytes using encoding/hex.
+// Strips the 0x prefix if present.
+func hexToBytes(hexStr string) ([]byte, error) {
+	// Strip 0x or 0X prefix if present
+	hexStr = strings.TrimPrefix(hexStr, "0x")
+	hexStr = strings.TrimPrefix(hexStr, "0X")
+	
+	// Decode using standard library
+	return hex.DecodeString(hexStr)
 }
 
 func parseInt(s string) (int, error) {

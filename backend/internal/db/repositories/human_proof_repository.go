@@ -220,3 +220,27 @@ func (r *HumanProofRepository) CountVerifiedByUserID(ctx context.Context, userID
 	}
 	return count, nil
 }
+
+// GetLatestVerifiedTimestamp returns the most recent verification timestamp for a user.
+// Returns zero time if no verified proofs exist.
+func (r *HumanProofRepository) GetLatestVerifiedTimestamp(ctx context.Context, userID string) (time.Time, error) {
+	var verifiedAt sql.NullTime
+	query := `
+		SELECT verified_at 
+		FROM human_proofs 
+		WHERE user_id = $1 AND verified = true AND verified_at IS NOT NULL
+		ORDER BY verified_at DESC 
+		LIMIT 1
+	`
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&verifiedAt)
+	if err == sql.ErrNoRows {
+		return time.Time{}, nil // No verified proofs
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("get latest verified timestamp: %w", err)
+	}
+	if !verifiedAt.Valid {
+		return time.Time{}, nil
+	}
+	return verifiedAt.Time, nil
+}

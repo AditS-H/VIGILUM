@@ -1,0 +1,16 @@
+{
+  "apiVersion": 1,
+  "providers": [
+    {
+      "name": "Vigilum Dashboards",
+      "orgId": 1,
+      "folder": "Vigilum",
+      "type": "file",
+      "disableDeletion": false,
+      "editable": true,
+      "options": {
+        "path": "/etc/grafana/provisioning/dashboards"
+      }
+    }
+  ]
+}

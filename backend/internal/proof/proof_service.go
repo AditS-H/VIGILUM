@@ -56,6 +56,7 @@ type ProofServiceConfig struct {
 	EnableTiming       bool          // Track timing variance
 	EnableGasAnalysis  bool          // Analyze gas consumption
 	ContractDiversity  int32         // Required unique contracts for full score
+	EnableWasmVerification bool      // Enable real WASM verification (false = stub mode)
 }
 
 // ProofService manages ZK proof generation, challenges, and verification.

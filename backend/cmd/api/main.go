@@ -48,10 +48,17 @@ func main() {
 	// Initialize database connection
 	database, err := db.New(cfg.Database, logger)
 	if err != nil {
-		slog.Error("Failed to connect to database", "error", err)
-		os.Exit(1)
+		// In development mode, allow running without database for testing
+		if cfg.Env == "development" {
+			slog.Warn("Failed to connect to database - running in demo mode without persistence", "error", err)
+			database = nil
+		} else {
+			slog.Error("Failed to connect to database", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		defer database.Close()
 	}
-	defer database.Close()
 
 	// Initialize Ethereum client (optional - if ETH_RPC_URL is configured)
 	var ethClient *integration.EthereumClient
@@ -76,10 +83,16 @@ func main() {
 
 	// Initialize services
 	var firewallService *firewall.Service
-	if ethClient != nil {
-		firewallService = firewall.NewServiceWithEthereum(database, logger, ethClient)
+	if database != nil {
+		if ethClient != nil {
+			firewallService = firewall.NewServiceWithEthereum(database, logger, ethClient)
+		} else {
+			firewallService = firewall.NewService(database, logger)
+		}
 	} else {
-		firewallService = firewall.NewService(database, logger)
+		// Demo mode without database - create stub service
+		slog.Info("Running with stub firewall service (no database)")
+		firewallService = nil
 	}
 
 	// Initialize HTTP handlers
@@ -90,12 +103,16 @@ func main() {
 
 	// Health check endpoint
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if database == nil {
+			w.Write([]byte(`{"status":"healthy-demo-mode","version":"` + version + `","database":"not-connected"}`))
+			return
+		}
 		if err := database.HealthCheck(r.Context()); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte(`{"status":"unhealthy","database":"disconnected"}`))
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"healthy","version":"` + version + `"}`))
 	})
 

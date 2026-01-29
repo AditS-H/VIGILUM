@@ -168,6 +168,11 @@ func (hpv *HumanProofVerifier) GetUserProofs(
 	return proofs, nil
 }
 
+// GetUserProofCount returns the total count of proofs for a user.
+func (hpv *HumanProofVerifier) GetUserProofCount(ctx context.Context, userID string) (int64, error) {
+	return hpv.proofRepo.CountByUserID(ctx, userID)
+}
+
 // GetUserVerificationScore calculates a user's verification score based on proofs.
 func (hpv *HumanProofVerifier) GetUserVerificationScore(
 	ctx context.Context,
@@ -212,6 +217,50 @@ func (hpv *HumanProofVerifier) IsUserVerified(ctx context.Context, userID string
 	}
 
 	return verifiedCount > 0, nil
+}
+
+// UserVerificationMetadata contains user verification details.
+type UserVerificationMetadata struct {
+	RiskScore      float64
+	LastVerifiedAt time.Time
+	ProofCount     int64
+	VerifiedCount  int64
+}
+
+// GetUserVerificationMetadata retrieves comprehensive verification metadata for a user.
+func (hpv *HumanProofVerifier) GetUserVerificationMetadata(
+	ctx context.Context,
+	userID string,
+) (*UserVerificationMetadata, error) {
+	// Get user to retrieve risk score
+	user, err := hpv.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+
+	// Get latest verified timestamp
+	lastVerified, err := hpv.proofRepo.GetLatestVerifiedTimestamp(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get latest verified timestamp: %w", err)
+	}
+
+	// Get proof counts
+	totalCount, err := hpv.proofRepo.CountByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("count total proofs: %w", err)
+	}
+
+	verifiedCount, err := hpv.proofRepo.CountVerifiedByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("count verified proofs: %w", err)
+	}
+
+	return &UserVerificationMetadata{
+		RiskScore:      user.RiskScore,
+		LastVerifiedAt: lastVerified,
+		ProofCount:     totalCount,
+		VerifiedCount:  verifiedCount,
+	}, nil
 }
 
 // GetChallengeStatus retrieves the current status of a challenge.

@@ -1,0 +1,50 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'vigilum-backend'
+    static_configs:
+      - targets: ['localhost:8000']
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+
+  - job_name: 'temporal'
+    static_configs:
+      - targets: ['localhost:7233']
+
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['localhost:14269']
+
+alert_rules:
+  - name: vigilum_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(vigilum_errors_total[5m]) > 0.05
+        for: 5m
+        annotations:
+          summary: "High error rate detected"
+
+      - alert: SlowRequests
+        expr: histogram_quantile(0.95, vigilum_request_duration_ms) > 1000
+        for: 5m
+        annotations:
+          summary: "Request latency is high"
+
+      - alert: LowProofVerificationRate
+        expr: rate(vigilum_proofs_verified_total[5m]) < 0.1
+        for: 10m
+        annotations:
+          summary: "Proof verification rate is low"

@@ -45,6 +45,7 @@ func NewAPIServer(
 	// Add middleware
 	router.Use(LoggingMiddleware(logger))
 	router.Use(ErrorHandlingMiddleware(logger))
+	router.Use(CORSMiddleware())
 
 	server := &APIServer{
 		router:       router,

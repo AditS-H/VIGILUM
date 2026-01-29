@@ -92,7 +92,7 @@ export class ProofVerificationClient {
 
   constructor(options: ProofClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? '/api/v1';
-    this.fetcher = options.fetcher ?? fetch;
+    this.fetcher = options.fetcher ?? fetch.bind(globalThis);
   }
 
   /**

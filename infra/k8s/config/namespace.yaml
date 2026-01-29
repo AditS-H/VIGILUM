@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vigilum
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vigilum-secrets
+  namespace: vigilum
+type: Opaque
+stringData:
+  eth-rpc-url: "https://sepolia.infura.io/v3/YOUR_INFURA_KEY"
+  private-key: "0x..." # Base64 encoded
+  database-url: "postgresql://user:password@postgres:5432/vigilum"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vigilum-ingress
+  namespace: vigilum
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - vigilum.example.com
+    secretName: vigilum-tls
+  rules:
+  - host: vigilum.example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: vigilum-backend
+            port:
+              number: 8000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vigilum-frontend
+            port:
+              number: 3000
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vigilum-backend-pdb
+  namespace: vigilum
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: vigilum-backend

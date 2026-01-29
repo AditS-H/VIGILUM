@@ -142,7 +142,7 @@ func NewEthereumClient(config *EthereumConfig) (*EthereumClient, error) {
 
 // loadIdentityFirewallABI loads the IdentityFirewall contract ABI
 func (ec *EthereumClient) loadIdentityFirewallABI() error {
-	// ABI for IdentityFirewall contract (minimal required for integration)
+	// ABI for IdentityFirewall/VigilumRegistry contracts (combined minimal ABI for integration)
 	abiJSON := `[
 		{
 			"name": "verifyHumanProof",
@@ -198,6 +198,64 @@ func (ec *EthereumClient) loadIdentityFirewallABI() error {
 			"inputs": [{"name": "user", "type": "address"}],
 			"outputs": [
 				{
+					"name": "",
+					"type": "tuple",
+					"components": [
+						{"name": "latestProofHash", "type": "bytes32"},
+						{"name": "totalProofs", "type": "uint32"},
+						{"name": "firstVerifiedAt", "type": "uint64"},
+						{"name": "lastVerifiedAt", "type": "uint64"}
+					]
+				}
+			],
+			"stateMutability": "view"
+		},
+		{
+			"name": "registerContract",
+			"type": "function",
+			"inputs": [
+				{"name": "contractAddr", "type": "address"},
+				{"name": "bytecodeHash", "type": "bytes32"},
+				{"name": "initialRiskScore", "type": "uint256"}
+			],
+			"outputs": [],
+			"stateMutability": "nonpayable"
+		},
+		{
+			"name": "updateRiskScore",
+			"type": "function",
+			"inputs": [
+				{"name": "contractAddr", "type": "address"},
+				{"name": "newScore", "type": "uint256"},
+				{"name": "vulnCount", "type": "uint32"}
+			],
+			"outputs": [],
+			"stateMutability": "nonpayable"
+		},
+		{
+			"name": "getRiskScore",
+			"type": "function",
+			"inputs": [{"name": "contractAddr", "type": "address"}],
+			"outputs": [{"name": "", "type": "uint256"}],
+			"stateMutability": "view"
+		},
+		{
+			"name": "isBlacklisted",
+			"type": "function",
+			"inputs": [{"name": "contractAddr", "type": "address"}],
+			"outputs": [{"name": "", "type": "bool"}],
+			"stateMutability": "view"
+		},
+		{
+			"name": "blacklistContract",
+			"type": "function",
+			"inputs": [
+				{"name": "contractAddr", "type": "address"},
+				{"name": "reason", "type": "string"}
+			],
+			"outputs": [],
+			"stateMutability": "nonpayable"
+		}
 					"name": "",
 					"type": "tuple",
 					"components": [
@@ -715,6 +773,120 @@ func (ec *EthereumClient) PublicAddress() string {
 // ChainID returns the chain ID
 func (ec *EthereumClient) ChainID() *big.Int {
 	return ec.config.ChainID
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VIGILUM REGISTRY CONTRACT METHODS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// RegisterContract registers a new contract in VigilumRegistry
+func (ec *EthereumClient) RegisterContract(ctx context.Context, contractAddr common.Address, bytecodeHash common.Hash, riskScore *big.Int) error {
+	ec.mu.RLock()
+	defer ec.mu.RUnlock()
+
+	if ec.identityFirewallAddr == (common.Address{}) {
+		return fmt.Errorf("VigilumRegistry address not set")
+	}
+
+	// Pack function call: registerContract(address,bytes32,uint256)
+	data, err := ec.identityFirewallABI.Pack("registerContract", contractAddr, bytecodeHash, riskScore)
+	if err != nil {
+		return fmt.Errorf("failed to pack registerContract call: %w", err)
+	}
+
+	// Send transaction
+	_, err = ec.sendTransaction(ctx, data)
+	if err != nil {
+		return fmt.Errorf("failed to register contract: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateRiskScore updates the risk score for a registered contract
+func (ec *EthereumClient) UpdateRiskScore(ctx context.Context, contractAddr common.Address, newScore *big.Int, vulnCount uint32) error {
+	ec.mu.RLock()
+	defer ec.mu.RUnlock()
+
+	if ec.identityFirewallAddr == (common.Address{}) {
+		return fmt.Errorf("VigilumRegistry address not set")
+	}
+
+	// Pack function call: updateRiskScore(address,uint256,uint32)
+	data, err := ec.identityFirewallABI.Pack("updateRiskScore", contractAddr, newScore, vulnCount)
+	if err != nil {
+		return fmt.Errorf("failed to pack updateRiskScore call: %w", err)
+	}
+
+	// Send transaction
+	_, err = ec.sendTransaction(ctx, data)
+	if err != nil {
+		return fmt.Errorf("failed to update risk score: %w", err)
+	}
+
+	return nil
+}
+
+// GetRiskScore retrieves the risk score for a contract
+func (ec *EthereumClient) GetRiskScore(ctx context.Context, contractAddr common.Address) (*big.Int, error) {
+	ec.mu.RLock()
+	defer ec.mu.RUnlock()
+
+	if ec.identityFirewallAddr == (common.Address{}) {
+		return nil, fmt.Errorf("VigilumRegistry address not set")
+	}
+
+	// Pack function call: getRiskScore(address)
+	data, err := ec.identityFirewallABI.Pack("getRiskScore", contractAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack getRiskScore call: %w", err)
+	}
+
+	// Call contract
+	result, err := ec.callContract(ctx, data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get risk score: %w", err)
+	}
+
+	// Unpack result
+	var score *big.Int
+	err = ec.identityFirewallABI.UnpackIntoInterface(&score, "getRiskScore", result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unpack result: %w", err)
+	}
+
+	return score, nil
+}
+
+// IsBlacklisted checks if a contract is blacklisted
+func (ec *EthereumClient) IsBlacklisted(ctx context.Context, contractAddr common.Address) (bool, error) {
+	ec.mu.RLock()
+	defer ec.mu.RUnlock()
+
+	if ec.identityFirewallAddr == (common.Address{}) {
+		return false, fmt.Errorf("VigilumRegistry address not set")
+	}
+
+	// Pack function call: isBlacklisted(address)
+	data, err := ec.identityFirewallABI.Pack("isBlacklisted", contractAddr)
+	if err != nil {
+		return false, fmt.Errorf("failed to pack isBlacklisted call: %w", err)
+	}
+
+	// Call contract
+	result, err := ec.callContract(ctx, data)
+	if err != nil {
+		return false, fmt.Errorf("failed to check blacklist: %w", err)
+	}
+
+	// Unpack result
+	var isBlacklisted bool
+	err = ec.identityFirewallABI.UnpackIntoInterface(&isBlacklisted, "isBlacklisted", result)
+	if err != nil {
+		return false, fmt.Errorf("failed to unpack result: %w", err)
+	}
+
+	return isBlacklisted, nil
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
