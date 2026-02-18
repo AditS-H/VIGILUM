@@ -9,7 +9,7 @@ import (
 	"github.com/vigilum/backend/internal/api/handlers"
 	"github.com/vigilum/backend/internal/db/repositories"
 	"github.com/vigilum/backend/internal/proof"
-	zkproof "github.com/vigilum/backend/internal/proof/zkproof"
+	zkproof "github.com/vigilum/backend/internal/proof"
 )
 
 // APIServer wraps the Gin router and handlers.

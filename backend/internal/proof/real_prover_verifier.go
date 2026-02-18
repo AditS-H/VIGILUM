@@ -1,5 +1,5 @@
-// Package zkproof implements real ZK proof verification via Rust WASM backend.
-package zkproof
+// Package proof implements real ZK proof verification via Rust WASM backend.
+package proof
 
 import (
 	"context"

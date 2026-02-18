@@ -22,13 +22,13 @@ func TestUserRepository(t *testing.T) {
 	t.Run("Create and retrieve user", func(t *testing.T) {
 		user := &domain.User{
 			ID:             "user1",
-			WalletAddress:  domain.Address("0x1234567890"),
+			WalletAddress: "0x1234567890",
 			RiskScore:      50,
 			IsBlacklisted:  false,
 			CreatedAt:      time.Now(),
 		}
 
-		err := repo.Create(ctx, user)
+		_, err := repo.Create(ctx, user.WalletAddress)
 		if err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
@@ -46,11 +46,11 @@ func TestUserRepository(t *testing.T) {
 	t.Run("GetByWallet", func(t *testing.T) {
 		user := &domain.User{
 			ID:            "user2",
-			WalletAddress: domain.Address("0xABCDEF"),
+			WalletAddress: "0xABCDEF",
 			RiskScore:     75,
 			CreatedAt:     time.Now(),
 		}
-		repo.Create(ctx, user)
+		repo.Create(ctx, user.WalletAddress)
 
 		retrieved, err := repo.GetByWallet(ctx, user.WalletAddress)
 		if err != nil {
@@ -65,11 +65,11 @@ func TestUserRepository(t *testing.T) {
 	t.Run("Update risk score", func(t *testing.T) {
 		user := &domain.User{
 			ID:            "user3",
-			WalletAddress: domain.Address("0x3333"),
+			WalletAddress: "0x3333",
 			RiskScore:     10,
 			CreatedAt:     time.Now(),
 		}
-		repo.Create(ctx, user)
+		repo.Create(ctx, user.WalletAddress)
 
 		err := repo.UpdateRiskScore(ctx, user.ID, 99)
 		if err != nil {
@@ -85,11 +85,11 @@ func TestUserRepository(t *testing.T) {
 	t.Run("Blacklist operations", func(t *testing.T) {
 		user := &domain.User{
 			ID:            "user4",
-			WalletAddress: domain.Address("0x4444"),
+			WalletAddress: "0x4444",
 			RiskScore:     0,
 			CreatedAt:     time.Now(),
 		}
-		repo.Create(ctx, user)
+		repo.Create(ctx, user.WalletAddress)
 
 		err := repo.Blacklist(ctx, user.ID)
 		if err != nil {
@@ -112,11 +112,11 @@ func TestUserRepository(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			user := &domain.User{
 				ID:            fmt.Sprintf("user_risk_%d", i),
-				WalletAddress: domain.Address(fmt.Sprintf("0x%d", i)),
-				RiskScore:     int32(i * 20),
+				WalletAddress: fmt.Sprintf("0x%d", i),
+				RiskScore: float64(i * 20),
 				CreatedAt:     time.Now(),
 			}
-			repo.Create(ctx, user)
+			repo.Create(ctx, user.WalletAddress)
 		}
 
 		users, err := repo.ListByRiskScore(ctx, 50, 10)
@@ -138,10 +138,10 @@ func TestUserRepository(t *testing.T) {
 	t.Run("Delete user", func(t *testing.T) {
 		user := &domain.User{
 			ID:            "user_delete",
-			WalletAddress: domain.Address("0xDELETE"),
+			WalletAddress: "0xDELETE",
 			CreatedAt:     time.Now(),
 		}
-		repo.Create(ctx, user)
+		repo.Create(ctx, user.WalletAddress)
 
 		err := repo.Delete(ctx, user.ID)
 		if err != nil {
@@ -168,14 +168,14 @@ func TestHumanProofRepository(t *testing.T) {
 			ID:              "proof1",
 			UserID:          "user1",
 			ProofHash:       "hash123",
-			ProofData: domain.ProofData{
+			ProofData: &domain.ProofData{
 				TimingVariance:     100,
 				GasVariance:        50,
 				ContractDiversity:  3,
-				ProofNonce:         "nonce123",
+				ProofNonce: 1,
 			},
-			VerifierAddress: domain.Address("0xVERIFIER"),
-			ExpiresAt:       time.Now().Add(24 * time.Hour),
+			VerifierAddress: "0xVERIFIER",
+			ExpiresAt: func() *time.Time { t := time.Now().Add(24 * time.Hour); return &t }(),
 			CreatedAt:       time.Now(),
 		}
 
@@ -202,7 +202,7 @@ func TestHumanProofRepository(t *testing.T) {
 				UserID:          userID,
 				ProofHash:       fmt.Sprintf("hash%d", i),
 				ProofData:       domain.ProofData{TimingVariance: int32(i * 10)},
-				ExpiresAt:       time.Now().Add(24 * time.Hour),
+				ExpiresAt: func() *time.Time { t := time.Now().Add(24 * time.Hour); return &t }(),
 				CreatedAt:       time.Now(),
 			}
 			repo.Create(ctx, proof)
@@ -224,8 +224,8 @@ func TestHumanProofRepository(t *testing.T) {
 			UserID:          "user_verify",
 			ProofHash:       "verify_hash",
 			ProofData:       domain.ProofData{},
-			VerifierAddress: domain.Address("0x0"),
-			ExpiresAt:       time.Now().Add(24 * time.Hour),
+			VerifierAddress: "0x0",
+			ExpiresAt: func() *time.Time { t := time.Now().Add(24 * time.Hour); return &t }(),
 			CreatedAt:       time.Now(),
 		}
 		repo.Create(ctx, proof)
@@ -248,8 +248,8 @@ func TestHumanProofRepository(t *testing.T) {
 				ID:        fmt.Sprintf("count_proof_%d", i),
 				UserID:    userID,
 				ProofHash: fmt.Sprintf("ch%d", i),
-				ProofData: domain.ProofData{},
-				ExpiresAt: time.Now().Add(24 * time.Hour),
+				ProofData: &domain.ProofData{},
+				ExpiresAt: func() *time.Time { t := time.Now().Add(24 * time.Hour); return &t }(),
 				CreatedAt: time.Now(),
 			}
 			repo.Create(ctx, proof)
@@ -312,7 +312,7 @@ func TestThreatSignalRepository(t *testing.T) {
 				ChainID:     chainID,
 				Address:     addr,
 				SignalType:  "malware",
-				RiskScore:   int32(70 + i*5),
+				RiskScore: float64(70 + i*5),
 				ThreatLevel: "high",
 				SourceID:    fmt.Sprintf("src%d", i),
 				Metadata:    map[string]interface{}{},
@@ -898,3 +898,6 @@ func setupTestDB(t *testing.T) *sql.DB {
 func cleanupTestDB(t *testing.T, db *sql.DB) {
 	CleanupTestDB(t, db)
 }
+
+
+

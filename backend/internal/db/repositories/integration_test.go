@@ -21,13 +21,8 @@ func TestUserAndAPIKeyWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create user
-	user := &domain.User{
-		ID:            "test_user_1",
-		WalletAddress: domain.Address("0xUSER123"),
-		RiskScore:     0,
-		CreatedAt:     time.Now(),
-	}
-	if err := userRepo.Create(ctx, user); err != nil {
+	user, err := userRepo.Create(ctx, "0xUSER123")
+	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
 
@@ -35,6 +30,7 @@ func TestUserAndAPIKeyWorkflow(t *testing.T) {
 	tier := "premium"
 	for i := 0; i < 3; i++ {
 		keyHash := []byte(fmt.Sprintf("test_hash_%d", i))
+		expiresAt := time.Now().Add(365 * 24 * time.Hour)
 		apiKey := &domain.APIKey{
 			ID:        fmt.Sprintf("api_key_%d", i),
 			KeyHash:   keyHash,
@@ -43,7 +39,7 @@ func TestUserAndAPIKeyWorkflow(t *testing.T) {
 			Tier:      tier,
 			RateLimit: 10000,
 			CreatedAt: time.Now(),
-			ExpiresAt: sql.NullTime{Time: time.Now().Add(365 * 24 * time.Hour), Valid: true},
+			ExpiresAt: &expiresAt,
 			Revoked:   false,
 		}
 		if err := apiKeyRepo.Create(ctx, apiKey); err != nil {
@@ -111,31 +107,27 @@ func TestUserAndProofWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create user
-	user := &domain.User{
-		ID:            "proof_user_1",
-		WalletAddress: domain.Address("0xPROOFUSER"),
-		RiskScore:     0,
-		CreatedAt:     time.Now(),
-	}
-	if err := userRepo.Create(ctx, user); err != nil {
+	user, err := userRepo.Create(ctx, "0xPROOFUSER")
+	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
 
 	// Step 2: Generate multiple proofs
 	proofIDs := []string{}
 	for i := 0; i < 3; i++ {
+		expiresAt := time.Now().Add(24 * time.Hour)
 		proof := &domain.HumanProof{
 			ID:        fmt.Sprintf("proof_%d", i),
 			UserID:    user.ID,
-			ProofHash: fmt.Sprintf("proof_hash_%d", i),
-			ProofData: domain.ProofData{
-				TimingVariance:    int32(100 + i*10),
-				GasVariance:       int32(50 + i*5),
-				ContractDiversity: int32(2 + i),
-				ProofNonce:        fmt.Sprintf("nonce_%d", i),
+			ProofHash: []byte(fmt.Sprintf("proof_hash_%d", i)),
+			ProofData: &domain.ProofData{
+				TimingVariance:    float64(100 + i*10),
+				GasVariance:       float64(50 + i*5),
+				ContractDiversity: 2 + i,
+				ProofNonce:        int64(i),
 			},
-			VerifierAddress: domain.Address("0xVERIFIER"),
-			ExpiresAt:       time.Now().Add(24 * time.Hour),
+			VerifierAddress: "0xVERIFIER",
+			ExpiresAt:       &expiresAt,
 			CreatedAt:       time.Now(),
 		}
 		if err := proofRepo.Create(ctx, proof); err != nil {
@@ -154,7 +146,7 @@ func TestUserAndProofWorkflow(t *testing.T) {
 	}
 
 	// Step 4: Mark first proof as verified
-	if err := proofRepo.MarkVerified(ctx, proofIDs[0]); err != nil {
+	if err := proofRepo.MarkVerified(ctx, proofIDs[0], "0xVERIFIER", "0xTXHASH123"); err != nil {
 		t.Fatalf("Failed to mark proof verified: %v", err)
 	}
 
@@ -163,7 +155,10 @@ func TestUserAndProofWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get verified proof: %v", err)
 	}
-	if !verified.VerifiedAt.Valid {
+	if !verified.Verified {
+		t.Error("Proof should be marked as verified")
+	}
+	if verified.VerifiedAt == nil {
 		t.Error("VerifiedAt should be set for verified proof")
 	}
 
@@ -210,7 +205,7 @@ func TestThreatSignalPublishingWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	chainID := domain.ChainID(1)
-	targetAddress := domain.Address("0xTARGETCONTRACT")
+	targetAddress := "0xTARGETCONTRACT"
 
 	// Step 1: Create threat signals from multiple sources
 	signalIDs := []string{}
@@ -218,16 +213,16 @@ func TestThreatSignalPublishingWorkflow(t *testing.T) {
 		signal := &domain.ThreatSignal{
 			ID:          fmt.Sprintf("signal_%d", i),
 			ChainID:     chainID,
-			Address:     targetAddress,
+			Address: domain.Address(targetAddress),
 			SignalType:  "exploit",
-			RiskScore:   int32(70 + i*5),
+			RiskScore:   70 + i*5,
 			ThreatLevel: "high",
-			SourceID:    fmt.Sprintf("source_%d", i),
+			Source:      fmt.Sprintf("source_%d", i),
 			Metadata: map[string]interface{}{
 				"exploit_type": "reentrancy",
 				"confidence":   0.85,
 			},
-			PublishedAt: sql.NullTime{Valid: false},
+			PublishedAt: nil,
 			CreatedAt:   time.Now(),
 		}
 		if err := signalRepo.Create(ctx, signal); err != nil {
@@ -246,7 +241,7 @@ func TestThreatSignalPublishingWorkflow(t *testing.T) {
 	}
 
 	// Step 3: Aggregate signals for target entity
-	entitySignals, err := signalRepo.GetByEntity(ctx, chainID, targetAddress, 10)
+	entitySignals, err := signalRepo.GetByEntity(ctx, chainID, domain.Address(targetAddress), 10)
 	if err != nil {
 		t.Fatalf("Failed to get entity signals: %v", err)
 	}
@@ -264,9 +259,9 @@ func TestThreatSignalPublishingWorkflow(t *testing.T) {
 	}
 
 	// Step 5: Publish high-risk signals to blockchain
-	txHash := "0xPUBLISHTX123ABC"
+	// txHash removed - not needed
 	for _, sig := range highRisk {
-		if err := signalRepo.MarkPublished(ctx, sig.ID, txHash); err != nil {
+		if err := signalRepo.MarkPublished(ctx, sig.ID); err != nil {
 			t.Fatalf("Failed to mark signal published: %v", err)
 		}
 	}
@@ -276,7 +271,7 @@ func TestThreatSignalPublishingWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get published signal: %v", err)
 	}
-	if !published.PublishedAt.Valid {
+	if published.PublishedAt == nil {
 		t.Error("PublishedAt should be set")
 	}
 
@@ -303,7 +298,7 @@ func TestGenomeAnalysisWorkflow(t *testing.T) {
 	// Step 1: Create reference genome (malicious)
 	refGenome := &domain.Genome{
 		ID:              "ref_malicious_genome",
-		GenomeHash:      "ref_hash_malicious",
+		GenomeHash:      []byte("ref_hash_malicious"),
 		IPFSHash:        "QmRefMalicious",
 		BytecodeSize:    2048,
 		OpcodeCount:     1024,
@@ -323,11 +318,11 @@ func TestGenomeAnalysisWorkflow(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		genome := &domain.Genome{
 			ID:              fmt.Sprintf("similar_genome_%d", i),
-			GenomeHash:      fmt.Sprintf("sim_hash_%d", i),
+			GenomeHash:      []byte(fmt.Sprintf("sim_hash_%d", i)),
 			IPFSHash:        fmt.Sprintf("QmSim%d", i),
-			BytecodeSize:    2000 + int32(i*10),
-			OpcodeCount:     1010 + int32(i*5),
-			FunctionCount:   14 + int32(i),
+			BytecodeSize:    2000 + i*10,
+			OpcodeCount:     1010 + i*5,
+			FunctionCount:   14 + i,
 			ComplexityScore: 0.82,
 			Label:           "malicious",
 			Features: map[string]interface{}{
@@ -350,7 +345,7 @@ func TestGenomeAnalysisWorkflow(t *testing.T) {
 	}
 
 	// Step 4: List all malicious genomes
-	malicious, err := genomeRepo.ListByLabel(ctx, "malicious", 10)
+	malicious, err := genomeRepo.ListByLabel(ctx, "malicious", 10, 0)
 	if err != nil {
 		t.Fatalf("Failed to list malicious genomes: %v", err)
 	}
@@ -370,7 +365,7 @@ func TestGenomeAnalysisWorkflow(t *testing.T) {
 	// Step 6: Create benign genome for contrast
 	benignGenome := &domain.Genome{
 		ID:              "benign_genome",
-		GenomeHash:      "benign_hash",
+		GenomeHash: []byte("benign_hash"),
 		IPFSHash:        "QmBenign",
 		BytecodeSize:    512,
 		OpcodeCount:     256,
@@ -387,7 +382,7 @@ func TestGenomeAnalysisWorkflow(t *testing.T) {
 	}
 
 	// Step 7: Verify benign genomes are separate
-	benignList, err := genomeRepo.ListByLabel(ctx, "benign", 10)
+	benignList, err := genomeRepo.ListByLabel(ctx, "benign", 10, 0)
 	if err != nil {
 		t.Fatalf("Failed to list benign genomes: %v", err)
 	}
@@ -410,7 +405,7 @@ func TestExploitSubmissionBountyWorkflow(t *testing.T) {
 	// Step 1: Create genome for submission
 	genome := &domain.Genome{
 		ID:              "bounty_genome",
-		GenomeHash:      "bounty_hash",
+		GenomeHash: []byte("bounty_hash"),
 		IPFSHash:        "QmBounty",
 		BytecodeSize:    1024,
 		OpcodeCount:     512,
@@ -434,19 +429,19 @@ func TestExploitSubmissionBountyWorkflow(t *testing.T) {
 		Severity          string
 		BountyAmount      int64
 	}{
-		{"exploit_1", researcher1, "critical", 5000000},
-		{"exploit_2", researcher1, "high", 2500000},
-		{"exploit_3", researcher2, "medium", 1000000},
+		{"exploit_1", domain.Address(researcher1), "critical", 5000000},
+		{"exploit_2", domain.Address(researcher1), "high", 2500000},
+		{"exploit_3", domain.Address(researcher2), "medium", 1000000},
 	}
 
 	for _, sub := range submissions {
 		submission := &domain.ExploitSubmission{
 			ID:                sub.ID,
 			ResearcherAddress: sub.ResearcherAddress,
-			TargetContract:    domain.Address("0xTARGET"),
+			TargetContract:    "0xTARGET",
 			ChainID:           1,
-			ProofHash:         fmt.Sprintf("proof_%s", sub.ID),
-			GenomeID:          genome.ID,
+			ProofHash: []byte(fmt.Sprintf("proof_%s", sub.ID)),
+			GenomeID: &genome.ID,
 			Description:       "Test exploit",
 			Severity:          sub.Severity,
 			BountyAmount:      sub.BountyAmount,
@@ -460,12 +455,12 @@ func TestExploitSubmissionBountyWorkflow(t *testing.T) {
 	}
 
 	// Step 3: Get researcher's submissions
-	r1Submissions, err := submissionRepo.GetByResearcher(ctx, researcher1, 10, 0)
+	researcherSubs, err := submissionRepo.GetByResearcher(ctx, domain.Address(researcher1), 10, 0)
 	if err != nil {
 		t.Fatalf("Failed to get researcher submissions: %v", err)
 	}
-	if len(r1Submissions) != 2 {
-		t.Errorf("Expected 2 submissions from researcher1, got %d", len(r1Submissions))
+	if len(researcherSubs) != 2 {
+		t.Errorf("Expected 2 submissions from researcher1, got %d", len(researcherSubs))
 	}
 
 	// Step 4: Get pending submissions for verification
@@ -486,7 +481,7 @@ func TestExploitSubmissionBountyWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get verified submission: %v", err)
 	}
-	if !verified.VerifiedAt.Valid {
+	if verified.VerifiedAt == nil {
 		t.Error("VerifiedAt should be set")
 	}
 
@@ -505,7 +500,7 @@ func TestExploitSubmissionBountyWorkflow(t *testing.T) {
 	}
 
 	// Step 8: Count submissions by researcher
-	r1Count, err := submissionRepo.CountByResearcher(ctx, researcher1)
+	r1Count, err := submissionRepo.CountByResearcher(ctx, domain.Address(researcher1))
 	if err != nil {
 		t.Fatalf("Failed to count researcher submissions: %v", err)
 	}
@@ -528,13 +523,8 @@ func TestMultiRepositoryTransaction(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Create complete user ecosystem
-	user := &domain.User{
-		ID:            "ecosystem_user",
-		WalletAddress: domain.Address("0xECOSYSTEM"),
-		RiskScore:     0,
-		CreatedAt:     time.Now(),
-	}
-	if err := userRepo.Create(ctx, user); err != nil {
+	user, err := userRepo.Create(ctx, "0xECOSYSTEM")
+	if err != nil {
 		t.Fatalf("Failed to create user: %v", err)
 	}
 
@@ -547,7 +537,7 @@ func TestMultiRepositoryTransaction(t *testing.T) {
 		Tier:      "premium",
 		RateLimit: 50000,
 		CreatedAt: time.Now(),
-		ExpiresAt: sql.NullTime{Time: time.Now().Add(365 * 24 * time.Hour), Valid: true},
+		ExpiresAt: func() *time.Time { t := time.Now().Add(365 * 24 * time.Hour); return &t }(),
 		Revoked:   false,
 	}
 	if err := apiKeyRepo.Create(ctx, apiKey); err != nil {
@@ -558,15 +548,15 @@ func TestMultiRepositoryTransaction(t *testing.T) {
 	proof := &domain.HumanProof{
 		ID:        "ecosystem_proof",
 		UserID:    user.ID,
-		ProofHash: "ecosystem_proof_hash",
-		ProofData: domain.ProofData{
+		ProofHash: []byte("ecosystem_proof_hash"),
+		ProofData: &domain.ProofData{
 			TimingVariance:    100,
 			GasVariance:       50,
 			ContractDiversity: 3,
-			ProofNonce:        "nonce",
+			ProofNonce: 1,
 		},
-		VerifierAddress: domain.Address("0xVERIFIER"),
-		ExpiresAt:       time.Now().Add(24 * time.Hour),
+		VerifierAddress: "0xVERIFIER",
+		ExpiresAt: func() *time.Time { t := time.Now().Add(24 * time.Hour); return &t }(),
 		CreatedAt:       time.Now(),
 	}
 	if err := proofRepo.Create(ctx, proof); err != nil {
@@ -581,15 +571,15 @@ func TestMultiRepositoryTransaction(t *testing.T) {
 	signal := &domain.ThreatSignal{
 		ID:          "ecosystem_signal",
 		ChainID:     1,
-		Address:     domain.Address("0xTHREAT"),
+		Address:     "0xTHREAT",
 		SignalType:  "exploit",
 		RiskScore:   95,
 		ThreatLevel: "critical",
-		SourceID:    "api_source",
+		Source:    "api_source",
 		Metadata: map[string]interface{}{
 			"api_key_tier": "premium",
 		},
-		PublishedAt: sql.NullTime{Valid: false},
+		PublishedAt: nil,
 		CreatedAt:   time.Now(),
 	}
 	if err := signalRepo.Create(ctx, signal); err != nil {
@@ -647,7 +637,7 @@ func TestErrorHandlingAndEdgeCases(t *testing.T) {
 			t.Errorf("Expected ErrNotFound, got %v", err)
 		}
 
-		_, err = userRepo.GetByWallet(ctx, domain.Address("0xNONEXISTENT"))
+		_, err = userRepo.GetByWallet(ctx, "0xNONEXISTENT")
 		if err != domain.ErrNotFound {
 			t.Errorf("Expected ErrNotFound, got %v", err)
 		}
@@ -656,20 +646,15 @@ func TestErrorHandlingAndEdgeCases(t *testing.T) {
 	t.Run("Duplicate prevention", func(t *testing.T) {
 		user := &domain.User{
 			ID:            "dup_user",
-			WalletAddress: domain.Address("0xDUP"),
+			WalletAddress: "0xDUP",
 			CreatedAt:     time.Now(),
 		}
-		if err := userRepo.Create(ctx, user); err != nil {
+		if _, err := userRepo.Create(ctx, user.WalletAddress); err != nil {
 			t.Fatalf("Failed to create user: %v", err)
 		}
 
 		// Try to create with same wallet (should fail due to unique constraint)
-		dup := &domain.User{
-			ID:            "dup_user_2",
-			WalletAddress: domain.Address("0xDUP"),
-			CreatedAt:     time.Now(),
-		}
-		err := userRepo.Create(ctx, dup)
+		err := userRepo.Create(ctx, "0xDUP")
 		if err == nil {
 			t.Error("Expected error for duplicate wallet address")
 		}
@@ -702,11 +687,11 @@ func BenchmarkRepositoryOperations(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			user := &domain.User{
 				ID:            fmt.Sprintf("bench_user_%d", i),
-				WalletAddress: domain.Address(fmt.Sprintf("0x%x", i)),
-				RiskScore:     int32(i % 100),
+		WalletAddress: fmt.Sprintf("0x%x", i),
+			RiskScore:     float64(i % 100),
 				CreatedAt:     time.Now(),
 			}
-			userRepo.Create(ctx, user)
+			userRepo.Create(ctx, user.WalletAddress)
 		}
 	})
 
@@ -714,10 +699,10 @@ func BenchmarkRepositoryOperations(b *testing.B) {
 		// Setup
 		user := &domain.User{
 			ID:            "bench_get_user",
-			WalletAddress: domain.Address("0xBENCHGET"),
+			WalletAddress: "0xBENCHGET",
 			CreatedAt:     time.Now(),
 		}
-		userRepo.Create(ctx, user)
+		userRepo.Create(ctx, user.WalletAddress)
 
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -732,3 +717,13 @@ func BenchmarkRepositoryOperations(b *testing.B) {
 		}
 	})
 }
+
+
+
+
+
+
+
+
+
+

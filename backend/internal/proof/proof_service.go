@@ -1,5 +1,5 @@
-// Package zkproof implements zero-knowledge proof verification for human identity.
-package zkproof
+// Package proof implements zero-knowledge proof verification for human identity.
+package proof
 
 import (
 	"context"

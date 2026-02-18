@@ -11,7 +11,6 @@ import (
 
 	"github.com/vigilum/backend/internal/db/repositories"
 	"github.com/vigilum/backend/internal/domain"
-	zkproof "github.com/vigilum/backend/internal/proof/zkproof"
 )
 
 // TestIntegrationProofWorkflow tests the complete proof workflow end-to-end.
@@ -29,7 +28,7 @@ func TestIntegrationProofWorkflow(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	config := zkproof.ProofServiceConfig{
+	config := ProofServiceConfig{
 		MaxChallengeTime:     5 * time.Minute,
 		MaxProofAttempts:     3,
 		MinVerificationScore: 0.7,
@@ -79,7 +78,7 @@ func TestIntegrationProofWorkflow(t *testing.T) {
 		t.Log("✓ Challenge is active")
 
 		// Step 4: Submit proof
-		response := &zkproof.ProofResponse{
+		response := &ProofResponse{
 			ChallengeID:    challenge.ChallengeID,
 			ProofData:      []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f},
 			TimingVariance: 120,
@@ -148,7 +147,7 @@ func TestIntegrationProofWorkflow(t *testing.T) {
 		t.Logf("✓ Created %d users", userCount)
 
 		// Generate challenges for all users
-		challenges := make([]*zkproof.ProofChallenge, userCount)
+		challenges := make([]*ProofChallenge, userCount)
 		for i, user := range users {
 			challenge, err := verifier.GenerateProofChallenge(ctx, user.ID, domain.Address("0xVERIFIER"))
 			if err != nil {
@@ -164,7 +163,7 @@ func TestIntegrationProofWorkflow(t *testing.T) {
 			if challenge == nil {
 				continue
 			}
-			response := &zkproof.ProofResponse{
+			response := &ProofResponse{
 				ChallengeID:    challenge.ChallengeID,
 				ProofData:      []byte{0x00, 0x01, 0x02, 0x03},
 				TimingVariance: 100 + int64(i*50),
@@ -187,7 +186,7 @@ func TestIntegrationProofWorkflow(t *testing.T) {
 
 	t.Run("Proof challenge expiration", func(t *testing.T) {
 		// Create user with very short challenge TTL
-		expireConfig := zkproof.ProofServiceConfig{
+		expireConfig := ProofServiceConfig{
 			MaxChallengeTime: 1 * time.Millisecond,
 		}
 		shortLiveVerifier := NewHumanProofVerifier(db, expireConfig, logger)
@@ -275,8 +274,8 @@ func TestIntegrationProofWorkflow(t *testing.T) {
 		workflow := NewProofVerificationWorkflow(verifier, logger)
 
 		// Define proof submission function
-		submitProof := func(ctx context.Context) (*zkproof.ProofResponse, error) {
-			return &zkproof.ProofResponse{
+		submitProof := func(ctx context.Context) (*ProofResponse, error) {
+			return &ProofResponse{
 				ProofData:      []byte{0x00, 0x01, 0x02, 0x03},
 				TimingVariance: 150,
 				GasVariance:    700,
@@ -332,7 +331,7 @@ func BenchmarkIntegrationWorkflow(b *testing.B) {
 	defer repositories.CleanupTestDB(&testing.T{}, db)
 
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	config := zkproof.ProofServiceConfig{
+	config := ProofServiceConfig{
 		MaxChallengeTime: 5 * time.Minute,
 	}
 
@@ -359,7 +358,7 @@ func BenchmarkIntegrationWorkflow(b *testing.B) {
 
 		// Proof submission
 		if challenge != nil {
-			response := &zkproof.ProofResponse{
+			response := &ProofResponse{
 				ChallengeID:    challenge.ChallengeID,
 				ProofData:      []byte{0x00, 0x01, 0x02, 0x03},
 				TimingVariance: 100,

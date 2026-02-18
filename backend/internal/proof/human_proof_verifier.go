@@ -10,21 +10,20 @@ import (
 
 	"github.com/vigilum/backend/internal/db/repositories"
 	"github.com/vigilum/backend/internal/domain"
-	zkproof "github.com/vigilum/backend/internal/proof/zkproof"
 )
 
 // HumanProofVerifier orchestrates proof generation, challenges, and verification.
 type HumanProofVerifier struct {
 	proofRepo    domain.HumanProofRepository
 	userRepo     domain.UserRepository
-	proofService *zkproof.ProofService
+	proofService *ProofService
 	logger       *slog.Logger
 }
 
 // NewHumanProofVerifier creates a new proof verifier.
 func NewHumanProofVerifier(
 	db *sql.DB,
-	config zkproof.ProofServiceConfig,
+	config ProofServiceConfig,
 	logger *slog.Logger,
 ) *HumanProofVerifier {
 	if logger == nil {
@@ -34,7 +33,7 @@ func NewHumanProofVerifier(
 	return &HumanProofVerifier{
 		proofRepo:    repositories.NewHumanProofRepository(db),
 		userRepo:     repositories.NewUserRepository(db),
-		proofService: zkproof.NewProofService(config, logger),
+		proofService: NewProofService(config, logger),
 		logger:       logger,
 	}
 }
@@ -44,7 +43,7 @@ func (hpv *HumanProofVerifier) GenerateProofChallenge(
 	ctx context.Context,
 	userID string,
 	verifierAddress domain.Address,
-) (*zkproof.ProofChallenge, error) {
+) (*ProofChallenge, error) {
 	hpv.logger.InfoContext(ctx, "Generating proof challenge", "user_id", userID)
 
 	// Verify user exists
@@ -78,8 +77,8 @@ func (hpv *HumanProofVerifier) GenerateProofChallenge(
 // SubmitProofResponse processes a user's proof submission.
 func (hpv *HumanProofVerifier) SubmitProofResponse(
 	ctx context.Context,
-	response *zkproof.ProofResponse,
-) (*zkproof.ProofVerificationResult, error) {
+	response *ProofResponse,
+) (*ProofVerificationResult, error) {
 	hpv.logger.InfoContext(ctx, "Processing proof response",
 		"challenge_id", response.ChallengeID,
 	)
@@ -105,7 +104,7 @@ func (hpv *HumanProofVerifier) SubmitProofResponse(
 			ContractDiversity: result.ContractDiversity,
 			ProofNonce:        response.ProofNonce,
 		}
-		proofHash := zkproof.CalculateProofHash(challenge.UserID, proofData)
+		proofHash := CalculateProofHash(challenge.UserID, proofData)
 
 		// Create proof record
 		proof := &domain.HumanProof{
@@ -267,7 +266,7 @@ func (hpv *HumanProofVerifier) GetUserVerificationMetadata(
 func (hpv *HumanProofVerifier) GetChallengeStatus(
 	ctx context.Context,
 	challengeID string,
-) (*zkproof.ProofChallenge, error) {
+) (*ProofChallenge, error) {
 	challenge, err := hpv.proofService.GetChallenge(ctx, challengeID)
 	if err != nil {
 		return nil, fmt.Errorf("get challenge: %w", err)
@@ -323,8 +322,8 @@ func (pwf *ProofVerificationWorkflow) ExecuteWorkflow(
 	ctx context.Context,
 	userID string,
 	verifierAddress domain.Address,
-	submitProof func(ctx context.Context) (*zkproof.ProofResponse, error),
-) (*zkproof.ProofVerificationResult, error) {
+	submitProof func(ctx context.Context) (*ProofResponse, error),
+) (*ProofVerificationResult, error) {
 	pwf.Logger.InfoContext(ctx, "Starting proof verification workflow", "user_id", userID)
 
 	// Step 1: Generate challenge

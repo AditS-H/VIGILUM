@@ -51,7 +51,7 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Println(`
+	fmt.Print(`
 ╔═══════════════════════════════════════════════════════════════════════╗
 ║                    VIGILUM Admin CLI Tool v1.0                        ║
 ╚═══════════════════════════════════════════════════════════════════════╝
@@ -389,7 +389,7 @@ func runInteractive() {
 }
 
 func printInteractiveHelp() {
-	fmt.Println(`
+	fmt.Print(`
 Interactive Commands:
   blacklist <addr> [reason]  - Blacklist a contract
   whitelist <addr>           - Remove from blacklist

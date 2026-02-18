@@ -1,0 +1,24 @@
+groups:
+  - name: vigilum_alerts
+    interval: 15s
+    rules:
+      - alert: HighErrorRate
+        expr: rate(vigilum_errors_total[5m]) > 0.05
+        for: 5m
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for the last 5 minutes"
+
+      - alert: SlowRequests
+        expr: histogram_quantile(0.95, vigilum_request_duration_ms) > 1000
+        for: 5m
+        annotations:
+          summary: "Request latency is high"
+          description: "95th percentile request duration exceeds 1000ms"
+
+      - alert: LowProofVerificationRate
+        expr: rate(vigilum_proofs_verified_total[5m]) < 0.1
+        for: 10m
+        annotations:
+          summary: "Proof verification rate is low"
+          description: "Proof verification rate is below 0.1 per second"

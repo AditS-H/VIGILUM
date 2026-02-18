@@ -3,7 +3,6 @@ package ml
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log/slog"
 	"net/http"
 	"sync"

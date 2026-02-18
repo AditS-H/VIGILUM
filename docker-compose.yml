@@ -3,6 +3,7 @@
 services:
   # Backend application
   backend:
+    image: vigilum-api:local
     build:
       context: .
       dockerfile: Dockerfile

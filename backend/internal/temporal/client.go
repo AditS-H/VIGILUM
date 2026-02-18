@@ -57,9 +57,9 @@ func NewClient(logger *slog.Logger, config ClientConfig) (*Client, error) {
 // ExecuteWorkflow starts a workflow execution.
 func (c *Client) ExecuteWorkflow(ctx context.Context, workflowID string, workflow interface{}, args ...interface{}) (client.WorkflowRun, error) {
 	workflowOptions := client.StartWorkflowOptions{
-		ID:        workflowID,
-		TaskQueue: c.config.TaskQueue,
-		StartToCloseTimeout: c.config.Timeout,
+		ID:                     workflowID,
+		TaskQueue:              c.config.TaskQueue,
+		WorkflowExecutionTimeout: c.config.Timeout,
 	}
 
 	run, err := c.client.ExecuteWorkflow(ctx, workflowOptions, workflow, args...)

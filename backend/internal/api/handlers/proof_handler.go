@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vigilum/backend/internal/domain"
 	"github.com/vigilum/backend/internal/proof"
-	zkproof "github.com/vigilum/backend/internal/proof/zkproof"
 )
 
 // ProofHandler handles proof verification HTTP requests.
@@ -221,7 +220,7 @@ func (ph *ProofHandler) SubmitProof(c *gin.Context) {
 	}
 
 	// Create proof response
-	proofResponse := &zkproof.ProofResponse{
+	proofResponse := &proof.ProofResponse{
 		ChallengeID:    req.ChallengeID,
 		ProofData:      proofData,
 		TimingVariance: req.TimingVariance,

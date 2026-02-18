@@ -65,3 +65,6 @@ htmlcov/
 # Build artifacts
 *.o
 *.a
+
+/Learnings/
+

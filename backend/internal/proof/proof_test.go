@@ -11,7 +11,6 @@ import (
 
 	"github.com/vigilum/backend/internal/db/repositories"
 	"github.com/vigilum/backend/internal/domain"
-	zkproof "github.com/vigilum/backend/internal/proof/zkproof"
 )
 
 // setupTestEnvironment initializes test database and repositories.
@@ -30,7 +29,7 @@ func setupTestEnvironment(t *testing.T) (*sql.DB, domain.UserRepository, domain.
 // TestProofServiceChallenge tests the basic challenge generation.
 func TestProofServiceChallenge(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	config := zkproof.ProofServiceConfig{
+	config := ProofServiceConfig{
 		ProverPath:       "/path/to/prover",
 		MaxChallengeTime: 5 * time.Minute,
 		MaxProofAttempts: 3,
@@ -40,7 +39,7 @@ func TestProofServiceChallenge(t *testing.T) {
 		ContractDiversity: 2,
 	}
 
-	service := zkproof.NewProofService(config, logger)
+	service := NewProofService(config, logger)
 	ctx := context.Background()
 
 	t.Run("Issue challenge", func(t *testing.T) {
@@ -89,10 +88,10 @@ func TestProofServiceChallenge(t *testing.T) {
 	})
 
 	t.Run("Challenge expiration", func(t *testing.T) {
-		config := zkproof.ProofServiceConfig{
+		config := ProofServiceConfig{
 			MaxChallengeTime: 1 * time.Millisecond, // Expire immediately
 		}
-		service := zkproof.NewProofService(config, logger)
+		service := NewProofService(config, logger)
 
 		userID := "test_user_4"
 		verifier := domain.Address("0xVERIFIER4")
@@ -109,7 +108,7 @@ func TestProofServiceChallenge(t *testing.T) {
 // TestProofVerification tests proof submission and verification.
 func TestProofVerification(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	config := zkproof.ProofServiceConfig{
+	config := ProofServiceConfig{
 		MaxChallengeTime:    5 * time.Minute,
 		MaxProofAttempts:    3,
 		MinVerificationScore: 0.7,
@@ -118,7 +117,7 @@ func TestProofVerification(t *testing.T) {
 		ContractDiversity:   2,
 	}
 
-	service := zkproof.NewProofService(config, logger)
+	service := NewProofService(config, logger)
 	ctx := context.Background()
 
 	t.Run("Valid proof submission", func(t *testing.T) {
@@ -127,7 +126,7 @@ func TestProofVerification(t *testing.T) {
 
 		challenge, _ := service.IssueChallenge(ctx, userID, verifier)
 
-		response := &zkproof.ProofResponse{
+		response := &ProofResponse{
 			ChallengeID:    challenge.ChallengeID,
 			ProofData:      []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f},
 			TimingVariance: 100,
@@ -152,7 +151,7 @@ func TestProofVerification(t *testing.T) {
 
 		challenge, _ := service.IssueChallenge(ctx, userID, verifier)
 
-		response := &zkproof.ProofResponse{
+		response := &ProofResponse{
 			ChallengeID:    challenge.ChallengeID,
 			ProofData:      []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f},
 			TimingVariance: 2000, // Excessive
@@ -175,16 +174,16 @@ func TestProofVerification(t *testing.T) {
 	t.Run("Max attempts exceeded", func(t *testing.T) {
 		userID := "test_user_7"
 		verifier := domain.Address("0xVERIFIER7")
-		config := zkproof.ProofServiceConfig{
+		config := ProofServiceConfig{
 			MaxProofAttempts: 2,
 		}
-		service := zkproof.NewProofService(config, logger)
+		service := NewProofService(config, logger)
 
 		challenge, _ := service.IssueChallenge(ctx, userID, verifier)
 
 		// Submit max attempts
 		for i := 0; i < 2; i++ {
-			response := &zkproof.ProofResponse{
+			response := &ProofResponse{
 				ChallengeID:    challenge.ChallengeID,
 				ProofData:      []byte{0x00},
 				TimingVariance: 100,
@@ -196,7 +195,7 @@ func TestProofVerification(t *testing.T) {
 		}
 
 		// Next attempt should fail
-		response := &zkproof.ProofResponse{
+		response := &ProofResponse{
 			ChallengeID:    challenge.ChallengeID,
 			ProofData:      []byte{0x00},
 			TimingVariance: 100,
@@ -218,7 +217,7 @@ func TestHumanProofVerifier(t *testing.T) {
 	defer repositories.CleanupTestDB(t, db)
 
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	config := zkproof.ProofServiceConfig{
+	config := ProofServiceConfig{
 		MaxChallengeTime:    5 * time.Minute,
 		MaxProofAttempts:    3,
 		MinVerificationScore: 0.7,
@@ -287,7 +286,7 @@ func TestHumanProofVerifier(t *testing.T) {
 		challenge, _ := verifier.GenerateProofChallenge(ctx, user.ID, domain.Address("0xVERIFIER"))
 
 		// Submit proof
-		response := &zkproof.ProofResponse{
+		response := &ProofResponse{
 			ChallengeID:    challenge.ChallengeID,
 			ProofData:      []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f},
 			TimingVariance: 150,
@@ -392,7 +391,7 @@ func TestProofVerificationWorkflow(t *testing.T) {
 	defer repositories.CleanupTestDB(t, db)
 
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	config := zkproof.ProofServiceConfig{
+	config := ProofServiceConfig{
 		MaxChallengeTime:    5 * time.Minute,
 		MaxProofAttempts:    3,
 		MinVerificationScore: 0.7,
@@ -416,8 +415,8 @@ func TestProofVerificationWorkflow(t *testing.T) {
 			ctx,
 			user.ID,
 			domain.Address("0xVERIFIER"),
-			func(ctx context.Context) (*zkproof.ProofResponse, error) {
-				return &zkproof.ProofResponse{
+			func(ctx context.Context) (*ProofResponse, error) {
+				return &ProofResponse{
 					ProofData:      []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f},
 					TimingVariance: 100,
 					GasVariance:    500,
@@ -440,10 +439,10 @@ func TestProofVerificationWorkflow(t *testing.T) {
 // BenchmarkProofGeneration benchmarks challenge generation.
 func BenchmarkProofGeneration(b *testing.B) {
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	config := zkproof.ProofServiceConfig{
+	config := ProofServiceConfig{
 		MaxChallengeTime: 5 * time.Minute,
 	}
-	service := zkproof.NewProofService(config, logger)
+	service := NewProofService(config, logger)
 	ctx := context.Background()
 
 	b.ResetTimer()
@@ -455,10 +454,10 @@ func BenchmarkProofGeneration(b *testing.B) {
 // BenchmarkProofVerification benchmarks proof verification.
 func BenchmarkProofVerification(b *testing.B) {
 	logger := slog.New(slog.NewTextHandler(nil, nil))
-	config := zkproof.ProofServiceConfig{
+	config := ProofServiceConfig{
 		MaxChallengeTime: 5 * time.Minute,
 	}
-	service := zkproof.NewProofService(config, logger)
+	service := NewProofService(config, logger)
 	ctx := context.Background()
 
 	challenge, _ := service.IssueChallenge(ctx, "bench_user", domain.Address("0xVERIFIER"))
@@ -467,7 +466,7 @@ func BenchmarkProofVerification(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		response := &zkproof.ProofResponse{
+		response := &ProofResponse{
 			ChallengeID:    challenge.ChallengeID,
 			ProofData:      proofData,
 			TimingVariance: 100,
