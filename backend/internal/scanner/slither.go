@@ -110,31 +110,31 @@ func (s *SlitherScanner) Scan(ctx context.Context, contract *domain.Contract) (*
 	// Convert to domain vulnerabilities
 	vulnerabilities := s.mapFindingsToVulnerabilities(findings, contract)
 
-	// Calculate risk score
+	// Calculate risk score and metrics
+	duration := time.Since(startTime)
 	riskScore := s.calculateRiskScore(vulnerabilities)
 	threatLevel := s.determineThreatLevel(riskScore)
-
-	// Calculate metrics
 	metrics := s.calculateMetrics(vulnerabilities, contract, duration)
 
 	s.logger.Info("Slither scan completed",
 		"contract_id", contract.ID,
 		"vulnerabilities", len(vulnerabilities),
 		"risk_score", riskScore,
+		"threat_level", threatLevel,
 		"duration", duration,
 	)
 
 	return &ScanResult{
 		Vulnerabilities: vulnerabilities,
-		RiskScore        metrics,
+		RiskScore:       riskScore,
+		ThreatLevel:     s.determineThreatLevel(riskScore),
+		Metrics:         metrics,
 		RawOutput:       slitherOutput,
 		Metadata: map[string]any{
 			"scanner":        "slither",
 			"version":        s.getSlitherVersion(),
 			"detectors_used": s.enabledChecks,
-			"analysis_time":  s.getSlitherVersion(),
-			"detectors_used":  s.enabledChecks,
-			"analysis_time":   duration.Seconds(),
+			"analysis_time":  duration.Seconds(),
 		},
 	}, nil
 }
@@ -240,7 +240,7 @@ func (s *SlitherScanner) runSlither(ctx context.Context, contractFile string) ([
 
 	// Run slither
 	cmd := exec.CommandContext(ctx, s.slitherPath, args...)
-	output, err := cmd.CombinedOutput()
+	output, _ := cmd.CombinedOutput()
 
 	// Slither returns non-zero exit code if vulnerabilities found
 	// This is expected, so we only error on context timeout/cancel
@@ -360,9 +360,7 @@ func (s *SlitherScanner) mapSlitherCheckToVulnType(check string) domain.VulnType
 	return domain.VulnLogicError
 }
 
-// mapSlitherImpactToSeverity maps Slither impact levels to domain severity.
-func (s *SlitherScanner) mapSlitherImpactToSeverity(impact string) domain.Severity {
-	switch strings.ToLower(impact) {threat level.
+// mapSlitherImpactToSeverity maps Slither impact levels to domain threat level.
 func (s *SlitherScanner) mapSlitherImpactToSeverity(impact string) domain.ThreatLevel {
 	switch strings.ToLower(impact) {
 	case "high":
@@ -374,7 +372,9 @@ func (s *SlitherScanner) mapSlitherImpactToSeverity(impact string) domain.Threat
 	case "informational":
 		return domain.ThreatLevelInfo
 	default:
-		return domain.ThreatLevel
+		return domain.ThreatLevelLow
+	}
+}
 
 // mapSlitherConfidenceToFloat converts Slither confidence to 0-1 scale.
 func (s *SlitherScanner) mapSlitherConfidenceToFloat(confidence string) float64 {
@@ -409,9 +409,7 @@ func (s *SlitherScanner) generateTitle(finding SlitherDetector) string {
 	return title
 }
 
-// extractLocation extracts source code location from Slither finding.
-func (s *SlitherScanner) extractLocation(finding SlitherDetector) string {
-	if len(fiCodeLocation extracts source code location from Slither finding.
+// extractCodeLocation extracts source code location from Slither finding.
 func (s *SlitherScanner) extractCodeLocation(finding SlitherDetector) domain.CodeLocation {
 	location := domain.CodeLocation{}
 
@@ -436,6 +434,8 @@ func (s *SlitherScanner) extractCodeLocation(finding SlitherDetector) domain.Cod
 	}
 
 	return location
+}
+
 // getRemediationAdvice returns remediation advice for common vulnerabilities.
 func (s *SlitherScanner) getRemediationAdvice(check string) string {
 	adviceMap := map[string]string{
@@ -454,7 +454,13 @@ func (s *SlitherScanner) getRemediationAdvice(check string) string {
 }
 
 // calculateRiskScore computes overall risk score from vulnerabilities.
-func (s *SlitherScannerThreatLevel]float64{
+func (s *SlitherScanner) calculateRiskScore(vulnerabilities []domain.Vulnerability) float64 {
+	if len(vulnerabilities) == 0 {
+		return 0.0
+	}
+
+	totalScore := 0.0
+	weights := map[domain.ThreatLevel]float64{
 		domain.ThreatLevelCritical: 10.0,
 		domain.ThreatLevelHigh:     7.0,
 		domain.ThreatLevelMedium:   4.0,
@@ -463,13 +469,7 @@ func (s *SlitherScannerThreatLevel]float64{
 	}
 
 	for _, vuln := range vulnerabilities {
-		weight := weights[vuln. 7.0,
-		domain.SeverityMedium:   4.0,
-		domain.SeverityLow:      1.0,
-	}
-
-	for _, vuln := range vulnerabilities {
-		weight := weights[vuln. Severity]
+		weight := weights[vuln.Severity]
 		// Factor in confidence
 		totalScore += weight * vuln.Confidence
 	}
@@ -495,6 +495,31 @@ func (s *SlitherScanner) determineThreatLevel(riskScore float64) domain.ThreatLe
 	default:
 		return domain.ThreatLevelNone
 	}
+}
+
+// calculateMetrics computes scan metrics from vulnerabilities.
+func (s *SlitherScanner) calculateMetrics(vulnerabilities []domain.Vulnerability, contract *domain.Contract, duration time.Duration) domain.ScanMetrics {
+	metrics := domain.ScanMetrics{
+		TotalIssues: len(vulnerabilities),
+	}
+
+	// Count by severity
+	for _, vuln := range vulnerabilities {
+		switch vuln.Severity {
+		case domain.ThreatLevelCritical:
+			metrics.CriticalCount++
+		case domain.ThreatLevelHigh:
+			metrics.HighCount++
+		case domain.ThreatLevelMedium:
+			metrics.MediumCount++
+		case domain.ThreatLevelLow:
+			metrics.LowCount++
+		case domain.ThreatLevelInfo:
+			metrics.InfoCount++
+		}
+	}
+
+	return metrics
 }
 
 // getSlitherVersion returns the installed Slither version.
