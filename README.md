@@ -10,6 +10,7 @@
 [![Rust](https://img.shields.io/badge/Rust-1.75+-000000?style=flat&logo=rust)](https://www.rust-lang.org)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat&logo=solidity)](https://soliditylang.org)
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat&logo=python)](https://python.org)
+[![Docker](https://img.shields.io/badge/Docker-aditsh%2Fvigilum--api-2496ED?style=flat&logo=docker)](https://hub.docker.com/r/aditsh/vigilum-api)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </div>
@@ -116,10 +117,10 @@ VIGILUM/
 
 ### Prerequisites
 
-- **Go 1.23+** — Backend services
+- **Docker** — Infrastructure and pre-built API image
+- **Go 1.24+** — Backend services (if building from source)
 - **Python 3.12+** — ML pipeline  
 - **Node.js 20+** — TypeScript SDK
-- **Docker** — Infrastructure
 - **Foundry** — Smart contracts
 - **WSL** (Windows) — For Noir circuits
 
@@ -138,6 +139,22 @@ docker compose up -d
 | Jaeger Tracing | http://localhost:16686 |
 
 ### 2. Run Backend
+
+#### Option A: Use Pre-built Docker Image (Recommended for Contributors)
+
+```bash
+# Pull the latest image from Docker Hub
+docker pull aditsh/vigilum-api:latest
+
+# Run the API
+docker run -p 8080:8080 \
+  -e DB_HOST=postgres \
+  -e DB_PORT=5432 \
+  -e REDIS_URL=redis://redis:6379 \
+  aditsh/vigilum-api:latest
+```
+
+#### Option B: Build from Source
 
 ```bash
 # Terminal 1: API Server
@@ -265,6 +282,54 @@ Backend (Go): Compiles ✅
 ML Pipeline: Models defined ✅
 SDK: Types & client ready ✅
 ```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! To get started quickly:
+
+### Quick Setup for Contributors
+
+1. **Use Pre-built Docker Image:**
+   ```bash
+   docker pull aditsh/vigilum-api:latest
+   ```
+
+2. **Start Infrastructure:**
+   ```bash
+   docker compose up -d
+   ```
+
+3. **Run the API:**
+   ```bash
+   docker run -p 8080:8080 \
+     --network vigilum-network \
+     -e DB_HOST=postgres \
+     -e REDIS_URL=redis://redis:6379 \
+     aditsh/vigilum-api:latest
+   ```
+
+### Building Your Own Image
+
+If you want to customize the backend:
+
+```bash
+# Build locally
+docker build -f Dockerfile -t vigilum-api:dev .
+
+# Or build all services
+docker compose build
+```
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests: `make test`
+5. Commit (`git commit -m 'Add amazing feature'`)
+6. Push to your fork and submit a Pull Request
 
 ---
 

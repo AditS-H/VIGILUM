@@ -3,10 +3,11 @@
 services:
   # Backend application
   backend:
-    image: vigilum-api:local
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: aditsh/vigilum-api:latest
+    # Uncomment below to build locally instead of using Docker Hub image
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: vigilum-api
     ports:
       - "8080:8080"

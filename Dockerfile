@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git make gcc musl-dev
@@ -41,9 +41,6 @@ WORKDIR /app
 COPY --from=builder /build/api /app/
 COPY --from=builder /build/scanner /app/
 COPY --from=builder /build/indexer /app/
-
-# Copy config files if they exist
-COPY backend/config/ /app/config/ 2>/dev/null || true
 
 # Change ownership
 RUN chown -R vigilum:vigilum /app

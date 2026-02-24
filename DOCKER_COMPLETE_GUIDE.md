@@ -975,11 +975,18 @@ All Services
 
 ## Quick Start & Commands
 
+> **Note:** The VIGILUM backend API is available as a pre-built Docker image on Docker Hub: [`aditsh/vigilum-api:latest`](https://hub.docker.com/r/aditsh/vigilum-api)
+> 
+> Contributors can pull and use this image directly without building from source!
+
 ### Start All Services
 
 ```bash
 # Navigate to project root
 cd /Hacking/VIGILUM
+
+# Pull the latest API image (optional, docker-compose will do this automatically)
+docker pull aditsh/vigilum-api:latest
 
 # Start all services
 docker-compose up -d
@@ -1075,6 +1082,33 @@ ssh -L 8080:localhost:8080 \
     -L 9090:localhost:9090 \
     -L 3000:localhost:3000 \
     user@remote-host
+```
+
+### Building and Pushing Custom Images
+
+If you need to customize the backend and push your own image:
+
+```bash
+# Build the image locally
+docker build -f Dockerfile -t vigilum-api:custom .
+
+# Tag for Docker Hub
+docker tag vigilum-api:custom <your-username>/vigilum-api:custom
+
+# Login to Docker Hub
+docker login
+
+# Push to Docker Hub
+docker push <your-username>/vigilum-api:custom
+```
+
+To use a custom image in docker-compose.yml:
+
+```yaml
+services:
+  backend:
+    image: <your-username>/vigilum-api:custom
+    # Comment out the default image
 ```
 
 ---
