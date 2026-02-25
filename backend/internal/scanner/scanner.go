@@ -3,7 +3,11 @@ package scanner
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"time"
 
+	"golang.org/x/sync/errgroup"
 	"github.com/vigilum/backend/internal/domain"
 )
 
@@ -67,23 +71,87 @@ func NewOrchestrator(scanners ...Scanner) *Orchestrator {
 	}
 }
 
-// ScanAll runs all applicable scanners on a contract.
+// ScanAll runs all applicable scanners on a contract in parallel.
+// Findings are deduplicated and aggregated using weighted scoring.
+// Individual scanner failures do not block the overall scan.
 func (o *Orchestrator) ScanAll(ctx context.Context, contract *domain.Contract, opts *ScanOptions) (*domain.ScanReport, error) {
 	if opts == nil {
 		opts = DefaultScanOptions()
 	}
 
+	startTime := time.Now()
+
 	report := &domain.ScanReport{
+		ID:              fmt.Sprintf("scan_%d_%s", time.Now().Unix(), contract.ID),
 		ContractID:      contract.ID,
 		ScanType:        domain.ScanTypeFull,
 		Status:          domain.ScanStatusRunning,
 		Vulnerabilities: make([]domain.Vulnerability, 0),
+		StartedAt:       startTime,
 	}
 
-	// TODO: Run scanners concurrently with errgroup
-	// TODO: Deduplicate findings
-	// TODO: Calculate aggregate risk score
-	// TODO: Determine overall threat level
+	// Create a timeout context if specified
+	scanCtx := ctx
+	var cancel context.CancelFunc
+	if opts != nil && opts.Timeout > 0 {
+		scanCtx, cancel = context.WithTimeout(ctx, time.Duration(opts.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	// Create aggregator for combining results
+	aggregator := NewScanAggregator()
+
+	// Run scanners concurrently with errgroup
+	g, groupCtx := errgroup.WithContext(scanCtx)
+
+	// Run each scanner in a goroutine
+	for _, scanner := range o.scanners {
+		scanner := scanner // Capture for closure
+
+		g.Go(func() error {
+			result, err := scanner.Scan(groupCtx, contract)
+			if err != nil {
+				// Log error but don't fail entire scan - continue with other scanners
+				slog.Warn("Scanner failed",
+					"scanner", scanner.Name(),
+					"contract", contract.ID,
+					"error", err,
+				)
+				return nil // Don't return error - let other scanners finish
+			}
+
+			if result == nil {
+				return nil
+			}
+
+			// Add all findings from this scanner to aggregator
+			for _, vuln := range result.Vulnerabilities {
+				aggregator.AddFinding(vuln)
+			}
+
+			return nil
+		})
+	}
+
+	// Wait for all scanners to complete
+	if err := g.Wait(); err != nil {
+		report.Status = domain.ScanStatusFailed
+		report.Error = fmt.Sprintf("scan error: %v", err)
+		return report, err
+	}
+
+	// Get aggregated results
+	report.Vulnerabilities = aggregator.GetAggregatedFindings()
+	report.RiskScore = aggregator.CalculateAggregateRiskScore()
+	report.ThreatLevel = aggregator.DetermineThreatLevel(report.RiskScore)
+	report.Metrics = aggregator.CalculateMetrics()
+
+	// Update status and timing
+	duration := time.Since(startTime)
+	report.Status = domain.ScanStatusCompleted
+	now := time.Now()
+	report.CompletedAt = &now
+	report.Duration = duration
 
 	return report, nil
 }
